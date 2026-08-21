@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base",
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+
+    /* Correctness. Stricter than the reference project on purpose — see step 04's rationale. */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Interop */
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+
+    /* Output */
+    "sourceMap": true,
+    "declaration": false,
+    "noEmit": true
+  }
+
+  /* No "include"/"exclude"/"outDir" here on purpose. TypeScript resolves relative paths
+     against the file they are WRITTEN in, not the file that extends it, so any path set
+     here would point back into packages/config/tsconfig/. Each app declares its own. */
+}

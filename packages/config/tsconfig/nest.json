@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "NestJS (apps/api)",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "lib": ["ES2023"],
+    "types": ["node"],
+
+    /* NestJS DI reads the emitted parameter types — without this, constructor injection
+       fails at runtime with "Nest can't resolve dependencies". */
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+
+    /* Incompatible with emitDecoratorMetadata: type-only imports would be elided before
+       the metadata is emitted, so injected types disappear. */
+    "verbatimModuleSyntax": false,
+
+    /* Nest emits JS. apps/api sets "outDir": "./dist" in its own tsconfig — a relative path
+       set here would resolve against packages/config/tsconfig/, not the app. */
+    "noEmit": false,
+    "declaration": true,
+    "removeComments": true,
+    "incremental": true,
+
+    /* Nest's own generators produce code that trips these; strictness stays on everywhere else. */
+    "strictPropertyInitialization": false
+  }
+}

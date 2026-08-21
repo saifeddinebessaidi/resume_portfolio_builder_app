@@ -1,0 +1,21 @@
+# Workspace members. `apps/*` is empty until phase 2 (api) and phase 3 (web) create it —
+# pnpm tolerates a glob that matches nothing.
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 blocks dependency install scripts unless they are named here. Keeping this list
+# short and explicit is the point: an unexpected entry means a new package wants to execute
+# code at install time, which is worth reading before approving.
+#
+# Prisma needs its postinstall to fetch the query engine binary and generate the client.
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  prisma: true
+
+minimumReleaseAgeExclude:
+  - lucide-react@1.29.0
+
+# `Original REACHY (2)/` is reference-only and deliberately NOT a workspace member: it has its
+# own bun lockfile and its dependencies must never be resolved or hoisted into this workspace.

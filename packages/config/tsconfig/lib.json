@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Shared library (packages/*)",
+  "extends": "./base.json",
+  "compilerOptions": {
+    /* CommonJS, deliberately. apps/api is CommonJS (NestJS decorator metadata, see nest.json)
+       and cannot `require()` an ESM-only package; Next.js consumes CommonJS without trouble.
+       One output format that both apps can import beats a dual build nobody maintains. */
+    "module": "CommonJS",
+    "moduleResolution": "node",
+
+    /* Consumers need types and incremental project references. */
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "noEmit": false,
+
+    /* Incompatible with a CommonJS emit target: it would require `import x = require()`
+       syntax throughout. `consistent-type-imports` in ESLint keeps type imports explicit
+       instead. */
+    "verbatimModuleSyntax": false,
+
+    "lib": ["ES2023"]
+  }
+
+  /* No outDir/rootDir/tsBuildInfoFile here — relative paths resolve against THIS file.
+     Each package sets its own. */
+}

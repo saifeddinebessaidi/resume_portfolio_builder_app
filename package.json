@@ -1,0 +1,30 @@
+{
+  "name": "reacchy-career-builder",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "REACCHY Career Builder — resume & portfolio builder SaaS (monorepo root, scripts only)",
+  "packageManager": "pnpm@11.18.0",
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "verify": "turbo run typecheck lint test",
+    "db:migrate": "pnpm --filter @repo/api db:migrate",
+    "db:seed": "pnpm --filter @repo/api db:seed",
+    "db:studio": "pnpm --filter @repo/api db:studio",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.6",
+    "turbo": "^2.10.8",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src"],
+  "exclude": ["**/*.spec.ts", "test", "dist"],
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    // Must live INSIDE outDir. nest-cli's `deleteOutDir` wipes dist/ on every build; with the
+    // buildinfo outside it, tsc reads stale state, concludes the output is current and emits
+    // NOTHING — a silent empty build that exits 0. Keeping them together makes deleting the
+    // output also invalidate the incremental state.
+    "tsBuildInfoFile": "dist/tsconfig.build.tsbuildinfo"
+  }
+}

@@ -1,0 +1,794 @@
+// =============================================================================
+// REACCHY Career Builder — application datastore
+//
+// 20 models in six groups: identity, catalog, access, work, billing, tracking.
+// Read top to bottom it tells the same story as docs/overview/03-data-model.md.
+//
+// Conventions applied everywhere:
+//   * cuid() string primary keys, except AnalyticsEvent (insert-heavy, range-scanned by time)
+//   * createdAt / updatedAt on every mutable model
+//   * money is Int in MINOR units (TND has 3 decimals: 25 TND = 25000 millimes) — never Float
+//   * tax as basis points, never a percentage float
+//   * deletedAt soft delete on user-owned rows: quota must stay accountable after deletion
+//   * Json columns are Jsonb, validated by Zod on the way in
+//   * every @@index maps to a query the application actually runs
+//   * onDelete: Restrict on financial rows — deleting a user must not erase revenue
+//
+// Both connection URLs are required: Neon's pooler runs in transaction mode and cannot
+// execute DDL, so migrations must bypass it via directUrl.
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =============================================================================
+// ENUMS
+//
+// Every one of these is duplicated in packages/contracts, by necessity: Prisma
+// generates its own enums and apps/web must never import @prisma/client. A phase 9
+// test asserts parity, so adding a value here without updating the contract fails
+// the suite rather than production.
+// =============================================================================
+
+enum CategoryCode {
+  RESUME
+  PORTFOLIO
+  PORTFOLIO_PRO
+}
+
+enum BillingPeriod {
+  MONTHLY
+  SEMIANNUAL
+  ANNUAL
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELED
+}
+
+enum SubscriptionSource {
+  MANUAL_GRANT
+  CHECKOUT
+  MIGRATION
+}
+
+enum EntitlementKey {
+  PROJECT_CREATE_QUOTA
+  REVISION_PER_PROJECT
+  EXPORT_PER_PROJECT
+  PUBLICATION_SLOT
+  CUSTOM_SLUG
+  HOSTING_DAYS
+  ASSET_STORAGE_MB
+}
+
+enum ResetPeriod {
+  NONE
+  MONTHLY
+  TERM
+}
+
+enum ProjectStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+}
+
+enum PaymentProviderCode {
+  MANUAL
+  STRIPE
+  PAYMEE
+  BANK_TRANSFER
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+enum ExportFormat {
+  PDF
+  PNG
+  JSON
+}
+
+// =============================================================================
+// GROUP 1 — IDENTITY
+// =============================================================================
+
+/// The local mirror of an external identity, created just-in-time on the first
+/// authenticated request. We never create users ourselves.
+///
+/// No password column: credentials belong entirely to the identity provider. Storing
+/// one here would create a second source of truth for identity.
+///
+/// `role` is never derived from a token claim. Token metadata is user-influenceable —
+/// the reference project's signup trigger had to explicitly defend against a user
+/// self-assigning `role: "admin"`. Role is granted by an admin action that writes an
+/// AuditLog row.
+model User {
+  id String @id @default(cuid())
+
+  /// The `sub` claim from the identity provider's JWT. The one external identity anchor.
+  externalAuthId String  @unique
+  email          String  @unique
+  fullName       String?
+  /// Reserved for future i18n.
+  locale         String  @default("fr")
+
+  role   UserRole   @default(USER)
+  /// SUSPENDED blocks at the auth guard, before any module sees the request.
+  status UserStatus @default(ACTIVE)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  /// Updated at most once per hour, not per request — this is on the hot path.
+  lastSeenAt DateTime?
+  deletedAt  DateTime?
+
+  subscriptions   Subscription[]
+  projects        Project[]
+  orders          Order[]
+  analyticsEvents AnalyticsEvent[]
+  auditLogs       AuditLog[]
+  projectVersions ProjectVersion[]
+  projectExports  ProjectExport[]
+  idempotencyKeys IdempotencyKey[]
+
+  /// For signups-per-day analytics.
+  @@index([createdAt])
+  @@index([status])
+}
+
+// =============================================================================
+// GROUP 2 — CATALOG
+//
+// Read on nearly every request, written almost never. Cached in-process with a TTL,
+// invalidated on admin write.
+// =============================================================================
+
+/// The editable metadata for a category. The CategoryCode enum gives type-safe
+/// branching in code; this table holds the display name, ordering and active flag an
+/// admin must be able to change without a deploy. Both are needed — that is not
+/// redundancy.
+model ProductCategory {
+  id   String       @id @default(cuid())
+  code CategoryCode @unique
+  /// French display name, e.g. "CV Professionnel".
+  name String
+  /// URL segment: resume / portfolio / portfolio-pro.
+  slug String       @unique
+
+  description String?
+  /// Dashboard table order.
+  sortOrder   Int     @default(0)
+  /// Hides a category from the app without deleting any data.
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  plans           Plan[]
+  projects        Project[]
+  subscriptions   Subscription[]
+  orders          Order[]
+  analyticsEvents AnalyticsEvent[]
+  dailyMetrics    DailyMetric[]
+
+  @@index([isActive, sortOrder])
+}
+
+model Plan {
+  id   String @id @default(cuid())
+  /// Stable machine key: RESUME_1M, PORTFOLIO_PRO_12M.
+  code String @unique
+
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// "1 Mois", "6 Mois", "1 An".
+  name          String
+  billingPeriod BillingPeriod
+  /// 30 / 180 / 365. An explicit day count so endsAt arithmetic has no month-length ambiguity.
+  durationDays  Int
+
+  /// MINOR units. 25 TND = 25000 millimes. Int, never Float — see ADR-0006.
+  priceMinor Int
+  currency   String @db.Char(3)
+
+  /// "Best Value", "Pro", "-10%" — the landing page's marketing badge.
+  badge     String?
+  /// Retiring a plan sets this false; existing subscriptions are unaffected.
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entitlements  PlanEntitlement[]
+  features      PlanFeature[]
+  subscriptions Subscription[]
+  orders        Order[]
+
+  @@index([categoryId, isActive, sortOrder])
+}
+
+/// The most important table in the schema.
+///
+/// Every advertised limit is one row, which makes it both enforceable and editable:
+/// "3 CVs per month" is (RESUME_1M, PROJECT_CREATE_QUOTA, 3, MONTHLY). Changing it to
+/// 5 is an UPDATE, not a deploy. See ADR-0005.
+model PlanEntitlement {
+  id String @id @default(cuid())
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  key         EntitlementKey
+  /// null = unlimited. 0 = explicitly denied. The difference is load-bearing.
+  limitValue  Int?
+  resetPeriod ResetPeriod    @default(NONE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, key])
+  @@index([key])
+}
+
+/// The literal marketing bullet, e.g. "1 téléchargement par CV".
+///
+/// Separate from PlanEntitlement on purpose: the live pricing page promises
+/// "Hébergement et mises à jour inclus" while the plan bullets cap revisions at 1/3/6.
+/// Marketing copy and enforced limits genuinely differ, and two tables make that
+/// divergence visible and reviewable instead of forcing us to lie or break the copy.
+model PlanFeature {
+  id String @id @default(cuid())
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  label     String
+  sortOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId, sortOrder])
+}
+
+// =============================================================================
+// GROUP 3 — ACCESS
+// =============================================================================
+
+/// One row per purchased term per category.
+///
+/// The four snapshot columns exist because changing RESUME_1M from 25 to 30 TND must
+/// not rewrite what past holders paid. Without them a price edit silently rewrites
+/// revenue history and every past invoice.
+///
+/// `categoryId` is denormalised from plan.categoryId for two concrete reasons: the
+/// entitlement lookup runs on every mutation and must not join through Plan, and the
+/// one-active-per-category partial unique index cannot be expressed without it. That
+/// index is added as raw SQL in the first migration — Prisma cannot express a WHERE
+/// clause on an index.
+model Subscription {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  status SubscriptionStatus @default(PENDING)
+
+  startsAt   DateTime
+  /// startsAt + plan.durationDays. A nightly cron moves lapsed rows to EXPIRED.
+  endsAt     DateTime
+  canceledAt DateTime?
+  /// Fixed term until decided otherwise — open question 4.
+  autoRenew  Boolean   @default(false)
+
+  source SubscriptionSource
+
+  /// null for a manual admin grant.
+  orderId String? @unique
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  planCodeSnapshot   String
+  priceMinorSnapshot Int
+  currencySnapshot   String @db.Char(3)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usageCounters UsageCounter[]
+  projects      Project[]
+
+  @@index([userId, status])
+  /// The entitlement lookup — the hottest path in the application.
+  @@index([userId, categoryId, status])
+  /// The expiry cron.
+  @@index([endsAt])
+}
+
+/// The concurrency control for quota.
+///
+/// The unique constraint is what makes consumption safe: the upsert takes a row-level
+/// lock, so two simultaneous "create resume" requests on a 3-CV plan with 2 used
+/// cannot both succeed — they serialise and the loser's post-increment check fails and
+/// rolls back. A `SELECT count(*)` followed by an insert, the obvious implementation,
+/// allows exactly that double-spend.
+///
+/// resetPeriod determines periodStart: MONTHLY -> first instant of the calendar month;
+/// TERM -> subscription.startsAt; NONE -> not metered here at all (per-project limits
+/// are counted on the project itself).
+model UsageCounter {
+  id String @id @default(cuid())
+
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  key EntitlementKey
+
+  periodStart DateTime
+  periodEnd   DateTime
+
+  used Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([subscriptionId, key, periodStart])
+  @@index([subscriptionId, key])
+}
+
+// =============================================================================
+// GROUP 4 — WORK
+// =============================================================================
+
+/// One table for all three categories.
+///
+/// They share ownership, lifecycle, quota accounting and the dashboard query; only the
+/// editable payload differs, and that lives in ProjectVersion.data as Jsonb validated
+/// by a per-category Zod schema. Three per-category tables would mean three duplicated
+/// CRUD stacks. See ADR-0004.
+model Project {
+  id String @id @default(cuid())
+
+  userId String
+  /// Sole owner. EVERY read is scoped by this, in the repository query — not only in a guard.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  /// Which subscription authorized creation. Needed to attribute quota after a plan change.
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+
+  title  String
+  status ProjectStatus @default(DRAFT)
+
+  /// Denormalised count of ProjectVersion rows BEYOND the first. Version 1 is creation
+  /// and consumes no revision, so this is exactly "revisions used".
+  revisionCount Int @default(0)
+
+  /// Pointer to the version being edited, so opening a project is one query.
+  currentVersionId String? @unique
+
+  lastOpenedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  /// Soft delete. A deleted CV still consumed quota and must stay accountable.
+  deletedAt    DateTime?
+
+  versions    ProjectVersion[]
+  publication ProjectPublication?
+  exports     ProjectExport[]
+  assets      ProjectAsset[]
+  events      AnalyticsEvent[]
+
+  /// GET /dashboard/summary.
+  @@index([userId, categoryId, deletedAt])
+  /// "Recent work".
+  @@index([userId, updatedAt])
+  @@index([subscriptionId])
+}
+
+/// Append-only, one row per save.
+///
+/// Append-only rather than an integer counter buys three things: the revision cap has an
+/// auditable trail when a customer disputes it, undo becomes possible, and a payload
+/// migration can be written against history instead of destroying it — which is what
+/// schemaVersion is for.
+///
+/// versionNumber 1 is the initial creation and does NOT consume a revision.
+model ProjectVersion {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  versionNumber Int
+
+  /// The builder payload.
+  data          Json @db.JsonB
+  /// Which version of the category's Zod payload schema wrote this row.
+  schemaVersion Int  @default(1)
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  exports ProjectExport[]
+
+  @@unique([projectId, versionNumber])
+  @@index([projectId, createdAt])
+}
+
+/// Separated from Project so the unauthenticated read path never touches draft data:
+/// the public endpoint selects from here and pulls only the published version.
+///
+/// expiresAt is what makes "Hosting inclus (6 mois)" a real, enforced promise — and it
+/// is enforced by the public read query itself, not by a cron job that might not have run.
+model ProjectPublication {
+  id String @id @default(cuid())
+
+  /// One publication per project.
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// The public URL segment: /p/:slug.
+  slug String @unique
+
+  /// The owner can unpublish without losing the slug.
+  isPublic Boolean @default(true)
+
+  publishedAt   DateTime  @default(now())
+  unpublishedAt DateTime?
+  /// The hosting term, from the plan's HOSTING_DAYS. null = never expires.
+  expiresAt     DateTime?
+
+  /// Denormalised counter for cheap display; PublicationView holds the detail.
+  viewCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  views PublicationView[]
+
+  /// The public read: WHERE slug = ? AND isPublic AND (expiresAt IS NULL OR expiresAt > now()).
+  @@index([isPublic, expiresAt])
+}
+
+model PublicationView {
+  id String @id @default(cuid())
+
+  publicationId String
+  publication   ProjectPublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of IP + salt. NEVER the raw IP.
+  ipHash    String?
+  userAgent String?
+  referrer  String?
+  country   String? @db.Char(2)
+
+  occurredAt DateTime @default(now())
+
+  @@index([publicationId, occurredAt])
+  @@index([occurredAt])
+}
+
+/// This table IS the download counter that enforces "1 téléchargement par CV":
+/// count(*) where projectId = X, against the plan's EXPORT_PER_PROJECT limit.
+model ProjectExport {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Exactly which content was exported.
+  projectVersionId String
+  projectVersion   ProjectVersion @relation(fields: [projectVersionId], references: [id], onDelete: Restrict)
+
+  format    ExportFormat @default(PDF)
+  /// Object storage key; null if streamed and not retained.
+  fileUrl   String?
+  sizeBytes Int?
+
+  createdAt       DateTime @default(now())
+  createdByUserId String
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+}
+
+/// Phase 5. sizeBytes is summed against the plan's ASSET_STORAGE_MB.
+model ProjectAsset {
+  id String @id @default(cuid())
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// image / video / document.
+  kind       String
+  storageKey String
+  url        String
+  mimeType   String
+  sizeBytes  Int
+
+  width     Int?
+  height    Int?
+  /// Gallery ordering.
+  sortOrder Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, sortOrder])
+}
+
+// =============================================================================
+// GROUP 5 — BILLING
+//
+// Order (intent) is split from Payment (money movement) because an order can
+// accumulate a failed card attempt then a successful one, a bank transfer arrives days
+// later, and a refund is a second negative movement against the same order. All three
+// are unrepresentable in a single row. See ADR-0007.
+// =============================================================================
+
+model Order {
+  id String @id @default(cuid())
+
+  userId String
+  /// Restrict, not Cascade: deleting a user must never silently erase revenue.
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  planId String
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  /// Denormalised for reporting.
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  status OrderStatus @default(PENDING)
+
+  /// Snapshot of plan.priceMinor at order time.
+  amountMinor Int
+  currency    String @db.Char(3)
+  /// Tax rate in BASIS POINTS (19% = 1900). Integer, for the same reason money is.
+  taxRateBp   Int    @default(0)
+
+  planCodeSnapshot String
+
+  /// Assigned on transition to PAID, never reused.
+  invoiceNumber String?   @unique
+  paidAt        DateTime?
+
+  /// Deduplicates a double-submitted checkout. Scoped to the user, not global: two customers
+  /// picking the same client-generated key must not collide, and a global unique would let one
+  /// account probe whether another had used a given key.
+  idempotencyKey String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments      Payment[]
+  webhookEvents WebhookEvent[]
+  subscription  Subscription?
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, status])
+  @@index([status, createdAt])
+}
+
+/// The replay record behind `Idempotency-Key` on POST /orders.
+///
+/// The Order.idempotencyKey unique index alone would deduplicate, but it cannot tell a retry of
+/// the *same* request from a reused key carrying a *different* body — the first must replay the
+/// original order, the second is a client bug and must 409. That needs the request hash, which
+/// is what this table holds.
+///
+/// Composite primary key rather than the key alone, for the same isolation reason as
+/// Order.idempotencyKey: keys are client-generated and must not be a shared namespace.
+model IdempotencyKey {
+  key String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the canonical request body. Mismatch on replay = IDEMPOTENCY_CONFLICT.
+  requestHash String
+  /// The created order's id. Null only inside the creating transaction.
+  resourceId  String?
+
+  createdAt DateTime @default(now())
+
+  @@id([userId, key])
+  /// Pruning: keys are kept 24 hours, which is far longer than any retry window.
+  @@index([createdAt])
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  provider PaymentProviderCode
+  status   PaymentStatus       @default(PENDING)
+
+  amountMinor Int
+  currency    String @db.Char(3)
+
+  /// Gateway transaction id.
+  providerRef String?
+  /// Verbatim gateway response, kept for disputes.
+  rawPayload  Json?   @db.JsonB
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([provider, providerRef])
+  @@index([orderId, status])
+}
+
+/// Gateways retry. The unique constraint IS the idempotency key: a duplicate delivery
+/// fails the insert and is acknowledged without re-running the side effect. One table
+/// now versus a reconciliation after a double-activation incident.
+model WebhookEvent {
+  id String @id @default(cuid())
+
+  provider   PaymentProviderCode
+  externalId String
+
+  eventType String
+  payload   Json   @db.JsonB
+
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  receivedAt  DateTime  @default(now())
+  /// null = received but not yet handled.
+  processedAt DateTime?
+  error       String?
+
+  @@unique([provider, externalId])
+  @@index([processedAt])
+}
+
+// =============================================================================
+// GROUP 6 — TRACKING
+// =============================================================================
+
+/// Append-only. Never updated, never deleted outside retention.
+///
+/// The only model not using cuid(): this is insert-heavy and range-scanned by time,
+/// where a sequential key indexes far better than a random one. Prisma returns BigInt,
+/// which does not survive JSON.stringify — the repository converts at the boundary.
+///
+/// Kept separate from the business tables so "track everything" never means "the
+/// dashboard scans the orders table". Designed to be month-partitioned later without a
+/// data migration.
+model AnalyticsEvent {
+  id BigInt @id @default(autoincrement())
+
+  /// Dotted taxonomy: project.created, order.paid, entitlement.denied.
+  name String
+
+  /// null for anonymous events, e.g. a public link view.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  sessionId String?
+
+  /// Promoted out of `properties` because we filter by them constantly.
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  properties Json @default("{}") @db.JsonB
+
+  occurredAt DateTime @default(now())
+
+  /// SHA-256 of IP + salt. NEVER the raw IP.
+  ipHash    String?
+  userAgent String?
+  referrer  String?
+
+  @@index([occurredAt])
+  @@index([name, occurredAt])
+  @@index([userId, occurredAt])
+  @@index([categoryId, occurredAt])
+}
+
+/// Pre-aggregated per day / metric / category, written by a nightly cron that
+/// aggregates AnalyticsEvent and the business tables. Admin dashboards read only this,
+/// so a 12-month chart reads ~365 rows instead of millions of events. Idempotent by the
+/// unique constraint, so it can be safely re-run to backfill. See ADR-0008.
+model DailyMetric {
+  id String @id @default(cuid())
+
+  day    DateTime @db.Date
+  /// users.signups, projects.created, revenue.paid.
+  metric String
+
+  /// null = all categories.
+  categoryId String?
+  category   ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Counts, or money in minor units. BigInt because revenue sums outgrow Int.
+  value BigInt
+
+  computedAt DateTime @default(now())
+
+  @@unique([day, metric, categoryId])
+  @@index([metric, day])
+}
+
+/// Every privileged mutation writes one row. Granting a subscription for free, changing
+/// a role or deleting another user's project must all be answerable to "who did this,
+/// when, and what was the previous value".
+model AuditLog {
+  id String @id @default(cuid())
+
+  /// null for system actions.
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  /// subscription.granted, user.role_changed.
+  action String
+
+  entityType String
+  entityId   String
+
+  before Json? @db.JsonB
+  after  Json? @db.JsonB
+
+  ip String?
+
+  createdAt DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+}

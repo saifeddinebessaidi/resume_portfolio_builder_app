@@ -35,15 +35,41 @@ import { env } from "@/lib/env";
  */
 const bodySchema = z.object({ email: z.email() });
 
-/** Production refuses unless explicitly opted in. Compared to the string, so a typo means "off". */
-const allowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_DEV_SIGNIN === "true";
-
 export async function POST(request: Request): Promise<NextResponse> {
-  if (!allowed) {
-    return NextResponse.json({ error: "Disabled in production." }, { status: 404 });
+  /**
+   * Read **inside the handler**, not at module scope.
+   *
+   * A module-scope `const` is evaluated once when the serverless function cold-starts, and on Vercel
+   * that evaluation can happen during the build's page-data collection — where the runtime variable is
+   * not necessarily present. Reading it per request removes the question entirely, and costs nothing.
+   */
+  const flag = process.env.ALLOW_DEV_SIGNIN;
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (isProduction && flag !== "true") {
+    /**
+     * The refusal **says which condition failed**, because the previous version could not.
+     *
+     * "Disabled in production." was returned both when the flag was unset *and* when a stale deployment
+     * was still running the old code — indistinguishable from outside, which turned a one-line
+     * configuration problem into guesswork. `flag` is echoed as `null` / `"set-but-not-true"` rather
+     * than verbatim so a value is never reflected back.
+     *
+     * Safe to expose: this route is a development placeholder, and knowing that a feature flag is off
+     * tells an attacker nothing they could not learn by trying.
+     */
+    return NextResponse.json(
+      {
+        error: "Disabled in production.",
+        reason: "ALLOW_DEV_SIGNIN is not enabled on this deployment.",
+        allowDevSignin: flag === undefined ? null : "set-but-not-true",
+        hint: "Set ALLOW_DEV_SIGNIN=true in the Vercel project and REDEPLOY — env changes do not apply to an existing deployment.",
+      },
+      { status: 404 },
+    );
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (isProduction) {
     // Logged on every use, so an accidentally-live staging flag is visible in the runtime logs
     // rather than silent.
     console.warn(
@@ -95,7 +121,7 @@ export async function POST(request: Request): Promise<NextResponse> {
      * Local development is plain http, so `false` there — a `Secure` cookie is simply dropped on
      * `http://localhost` and sign-in would break with no visible reason.
      */
-    secure: process.env.NODE_ENV === "production",
+    secure: isProduction,
     path: "/",
     maxAge: expiresIn,
   });

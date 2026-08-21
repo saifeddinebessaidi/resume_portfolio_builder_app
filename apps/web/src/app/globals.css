@@ -1,0 +1,565 @@
+@import "tailwindcss";
+
+/**
+ * Design lifted from `../Original REACHY (2)/src/styles.css`.
+ *
+ * **The landing page's dark premium scope (`.rc-dark`) is the product's look** — obsidian #09090B,
+ * indigo #6366F1, violet #8B5CF6, cyan #06B6D4, aurora radials, glass cards, pill buttons — and
+ * `docs/overview/02-architecture.md` names exactly those colours. The light `:root` palette in the
+ * reference file belongs to its older internal screens, not to REACCHY.
+ *
+ * Applied at `:root` here rather than under a `.rc-dark` class: the dashboard *is* the dark product,
+ * there is no light variant to switch between, and scoping it to a wrapper class would mean every
+ * page had to remember to opt in.
+ *
+ * Tailwind v4 with `@theme inline` and no `tailwind.config.js`, matching the reference project rather
+ * than translating it into a JS config that would then drift from it.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-cyan: var(--cyan);
+
+  --font-display: var(--font-poppins), sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+}
+
+:root {
+  --radius: 0.75rem;
+
+  --background: oklch(0.145 0.005 285); /* #09090B obsidian */
+  --foreground: oklch(0.98 0.002 285);
+  --card: oklch(0.19 0.008 285);
+  --card-foreground: oklch(0.98 0.002 285);
+  --popover: oklch(0.19 0.008 285);
+  --popover-foreground: oklch(0.98 0.002 285);
+
+  --primary: oklch(0.6 0.19 277); /* #6366F1 indigo */
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.24 0.01 285);
+  --secondary-foreground: oklch(0.98 0.002 285);
+
+  --muted: oklch(0.24 0.01 285);
+  --muted-foreground: oklch(0.68 0.015 285);
+
+  --accent: oklch(0.62 0.2 295); /* #8B5CF6 violet */
+  --accent-foreground: oklch(1 0 0);
+
+  --cyan: oklch(0.72 0.14 210); /* #06B6D4 */
+
+  --destructive: oklch(0.62 0.21 25);
+  --destructive-foreground: oklch(1 0 0);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 12%);
+  --ring: oklch(0.62 0.2 295);
+
+  --gradient-primary: linear-gradient(
+    120deg,
+    oklch(0.6 0.19 277),
+    oklch(0.62 0.2 295) 55%,
+    oklch(0.72 0.14 210)
+  );
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  /**
+   * **`color-scheme: dark` — the fix for the light scrollbar on a dark product.**
+   *
+   * This was missing, so the browser assumed a light page and painted its own chrome to match: a white
+   * scrollbar track down the side of an obsidian app, and light-on-light native controls. Declaring the
+   * scheme is the *native* mechanism — it repaints the scrollbar, the `<select>` popup list, date pickers,
+   * spinners and the focus ring, none of which any amount of `background-color` can reach.
+   *
+   * It also makes the per-element `[color-scheme:dark]` on the portfolio form's selects redundant. Those
+   * stay: they are load-bearing if this page is ever embedded, and harmless when they agree with the root.
+   */
+  :root {
+    color-scheme: dark;
+    /* Firefox and the standard property. Thin, because a 15px default bar is a lot of furniture. */
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /**
+   * WebKit/Blink still ignore `scrollbar-color`, so the same design is restated for them.
+   *
+   * `background-clip: content-box` with a transparent border is the trick that insets the thumb: it draws
+   * a slim pill with breathing room on both sides rather than a bar wedged against the edge of the window.
+   */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 20%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--accent) 70%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  /* Where two scrollbars meet. Left alone, WebKit fills this square with its default light grey. */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Visible focus ring on every interactive element — the keyboard-navigation requirement in
+     phase 3's definition of done, applied once rather than per component. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+/* ============ REACCHY premium surfaces — copied from the landing page ============ */
+
+@utility rc-aurora {
+  background:
+    radial-gradient(
+      60% 55% at 15% 10%,
+      color-mix(in oklab, var(--primary) 32%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      50% 50% at 85% 15%,
+      color-mix(in oklab, var(--cyan) 24%, transparent),
+      transparent 70%
+    ),
+    radial-gradient(
+      60% 60% at 50% 95%,
+      color-mix(in oklab, var(--accent) 28%, transparent),
+      transparent 70%
+    ),
+    var(--background);
+}
+
+@utility rc-glass {
+  background: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--foreground) 7%, transparent),
+    color-mix(in oklab, var(--foreground) 2%, transparent)
+  );
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  backdrop-filter: blur(18px);
+  transition:
+    transform 0.4s ease,
+    border-color 0.4s ease,
+    box-shadow 0.4s ease;
+}
+
+@utility rc-glass-hover {
+  &:hover {
+    transform: translateY(-6px);
+    border-color: color-mix(in oklab, var(--accent) 45%, transparent);
+    box-shadow: 0 24px 60px color-mix(in oklab, var(--accent) 22%, transparent);
+  }
+}
+
+@utility rc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.85rem 1.6rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+@utility rc-btn-primary {
+  background: var(--gradient-primary);
+  background-size: 200% 200%;
+  color: oklch(1 0 0);
+  box-shadow: 0 10px 34px color-mix(in oklab, var(--accent) 35%, transparent);
+  &:hover {
+    transform: translateY(-2px);
+    background-position: 100% 0%;
+    box-shadow: 0 16px 46px color-mix(in oklab, var(--accent) 50%, transparent);
+  }
+}
+
+@utility rc-btn-ghost {
+  border: 1px solid var(--border);
+  color: var(--foreground);
+  background: color-mix(in oklab, var(--foreground) 4%, transparent);
+  &:hover {
+    border-color: color-mix(in oklab, var(--cyan) 55%, transparent);
+    background: color-mix(in oklab, var(--foreground) 9%, transparent);
+  }
+}
+
+@utility rc-input {
+  background: color-mix(in oklab, var(--foreground) 6%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.85rem 1.25rem;
+  color: var(--foreground);
+  width: 100%;
+  &::placeholder {
+    color: var(--muted-foreground);
+  }
+  &:focus {
+    outline: none;
+    border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 18%, transparent);
+  }
+}
+
+@utility rc-gradient-text {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The subtle film grain the landing page puts over its aurora sections. */
+@utility rc-noise {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+}
+
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-reveal {
+  animation: reveal-up 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* The landing page's wordmark treatment: bold with wide tracking. */
+@utility rc-wordmark {
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+/* ============================================================================
+ * The public portfolio page — the audited repository's design, ported
+ *
+ * `web/app/portfolio/[id]/page.tsx` in the portfolio repo is a "Rebirth"-style editorial layout: pure
+ * black, white type, Tailwind's default serif for display, and motion everywhere. Its classes are copied
+ * verbatim into `public-portfolio.tsx`; what lives here is the animation those classes relied on
+ * `framer-motion` + `lenis` to provide.
+ *
+ * ## Why CSS instead of framer-motion and lenis
+ *
+ * The original brings framer-motion (~34kB gzipped), lenis and sonner to a page whose entire job is to
+ * load fast for a stranger who was sent a link. Every effect it uses — reveal-on-scroll, the hero's
+ * letter-by-letter blur-in, the marquee, the scroll-progress bar — is expressible in CSS and a single
+ * `IntersectionObserver`. The three things that genuinely need JavaScript (the photo crossfade timer, the
+ * hero parallax, the project modal) are small client islands.
+ *
+ * `prefers-reduced-motion` is honoured, which the original does not do: a full-bleed hero that pans and
+ * a marquee that never stops are exactly what that setting exists to disable.
+ * ========================================================================= */
+
+/** The template's own easing — the cubic-bezier lifted from the Framer original. */
+@theme {
+  --ease-rebirth: cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+/* Reveal-on-scroll: opacity + rise + de-blur, matching framer-motion's `whileInView` variant. */
+@keyframes pf-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(var(--pf-reveal-y, 40px));
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* The hero wordmark, one letter at a time. Per-letter delay is set inline. */
+@keyframes pf-letter {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes pf-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* The nav's entrance: `initial={{ opacity: 0.1, y: -75 }}`. */
+@keyframes pf-nav-in {
+  from {
+    opacity: 0.1;
+    transform: translateY(-75px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/**
+ * The REACCHY banner marquee.
+ *
+ * `-50%` and not `-100%`: the strip renders its wordmark run **twice**, so sliding exactly half the
+ * doubled width lands on a pixel-identical frame and the loop is seamless. Shifting the full width would
+ * snap back visibly.
+ */
+@keyframes pf-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.pf-root {
+  /* Geist, as in the original. The serif is Tailwind's default stack, which is what `font-serif`
+     resolved to there too — the original never declared one. */
+  font-family: var(--font-geist), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  background: #000;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/**
+ * The public page's own scrollbar, in its own palette.
+ *
+ * It is pure black and white rather than the app's obsidian-and-violet, so it gets white/20 on
+ * transparent instead of inheriting the accent hover. Declared on `:root:has(.pf-root)` because the
+ * document scrollbar belongs to the root element, not to `.pf-root` — styling the section would do
+ * nothing at all, which is the trap here.
+ */
+:root:has(.pf-root) {
+  scrollbar-color: rgb(255 255 255 / 25%) transparent;
+}
+
+:root:has(.pf-root) ::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 22%);
+}
+
+:root:has(.pf-root) ::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 45%);
+}
+
+/* Hidden until observed, so nothing flashes in at full opacity before the observer attaches. */
+.pf-reveal {
+  opacity: 0;
+}
+
+.pf-reveal[data-shown="true"] {
+  animation: pf-reveal 1s var(--ease-rebirth) both;
+  animation-delay: var(--pf-delay, 0s);
+}
+
+.pf-letter {
+  display: inline-block;
+  animation: pf-letter 0.6s var(--ease-rebirth) both;
+}
+
+.pf-fade {
+  animation: pf-fade-in 0.8s ease both;
+  animation-delay: var(--pf-delay, 0s);
+}
+
+.pf-rise {
+  animation: pf-rise 0.8s ease both;
+  animation-delay: var(--pf-delay, 0s);
+}
+
+.pf-nav {
+  animation: pf-nav-in 1s var(--ease-rebirth) 0.2s both;
+}
+
+.pf-marquee {
+  display: flex;
+  width: max-content;
+  animation: pf-marquee 22s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /**
+   * Everything resolves to its final state rather than to nothing.
+   *
+   * `animation: none` on a keyframe that starts at `opacity: 0` would leave the content invisible —
+   * the reason this needs explicit end-state overrides rather than a blanket disable.
+   */
+  .pf-reveal,
+  .pf-reveal[data-shown="true"],
+  .pf-letter,
+  .pf-fade,
+  .pf-rise,
+  .pf-nav {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .pf-marquee {
+    animation: none;
+  }
+
+  /* The hero stops panning and the photo crossfade stops advancing (handled in the component). */
+  .pf-parallax {
+    transform: none !important;
+  }
+}
+
+/* ============ Print — what becomes the PDF ============ */
+
+/**
+ * A4 with zero page margin: the sheet component carries its own 14mm padding, so a printer margin on
+ * top of that would double it and shrink the content area. This is the same arrangement the builder's
+ * Playwright service used (`margin: 0` plus the sheet's own padding).
+ */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  /* The dark product palette must not reach paper: an ATS reads black on white, and printing the
+     obsidian background would waste ink and destroy contrast. */
+  html,
+  body {
+    background: #fff !important;
+    color: #111 !important;
+  }
+
+  /* Chrome and Safari strip backgrounds and borders by default when printing; the ATS template relies
+     on its heading underlines, so they are forced back on. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Nothing but the sheet. The preview's transform scale would otherwise be printed as-is. */
+  .ats-root {
+    transform: none !important;
+    width: 210mm !important;
+    min-height: auto !important;
+    box-shadow: none !important;
+  }
+
+  /**
+   * Native pagination, courtesy of the block structure.
+   *
+   * The template already emits one bullet per block with `keepWithNext` on headings — which is exactly
+   * what these two rules need. `break-inside: avoid` stops a block being split mid-line;
+   * `break-after: avoid` on a heading stops it being orphaned at the foot of a page.
+   *
+   * This is why no measuring JavaScript paginator was ported: the browser's own layout engine does the
+   * page-breaking, and it does it against the real printed metrics rather than against measured pixel
+   * heights that then have to be trusted. Fewer moving parts, better result.
+   */
+  .ats-root > div {
+    break-inside: avoid;
+  }
+
+  .ats-root h2 {
+    break-after: avoid;
+  }
+
+  /* Anything explicitly marked as screen-only. */
+  [data-print="hide"] {
+    display: none !important;
+  }
+}

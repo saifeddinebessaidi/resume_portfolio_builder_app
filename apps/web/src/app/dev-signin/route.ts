@@ -16,12 +16,40 @@ import { env } from "@/lib/env";
  *
  * Guarded the same way: it refuses outright in a production build, so it cannot ship live even if the
  * file is forgotten.
+ *
+ * ## The staging escape hatch, and why it is shaped like this
+ *
+ * Vercel **always** runs Next.js with `NODE_ENV=production` — it is what enables React's production
+ * build and it is not meaningfully overridable. So the guard above, written for "never ship this live",
+ * also made the deployed staging site impossible to sign into: the form posted, got a 404, and showed
+ * "Une erreur est survenue."
+ *
+ * `ALLOW_DEV_SIGNIN=true` opts back in. Deliberately an **opt-in flag rather than a relaxed condition**:
+ * the default is still refusal, so a forgotten deploy stays safe, and turning it on is a decision
+ * someone made by name in a dashboard rather than a side effect of how the app was built.
+ *
+ * **What it costs, stated plainly:** with the flag on, anyone who reaches this URL can sign in as any
+ * email that exists — including an ADMIN — with no password. It is an open door. Acceptable only on a
+ * URL that has not been shared, and it must come off before launch. The real fix is the Supabase
+ * sign-in this route is a placeholder for; when that lands, this file is deleted and the flag with it.
  */
 const bodySchema = z.object({ email: z.email() });
 
+/** Production refuses unless explicitly opted in. Compared to the string, so a typo means "off". */
+const allowed = process.env.NODE_ENV !== "production" || process.env.ALLOW_DEV_SIGNIN === "true";
+
 export async function POST(request: Request): Promise<NextResponse> {
-  if (process.env.NODE_ENV === "production") {
+  if (!allowed) {
     return NextResponse.json({ error: "Disabled in production." }, { status: 404 });
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    // Logged on every use, so an accidentally-live staging flag is visible in the runtime logs
+    // rather than silent.
+    console.warn(
+      "[dev-signin] ALLOW_DEV_SIGNIN is enabled in a production build. " +
+        "Passwordless sign-in is OPEN on this deployment. Remove the flag before launch.",
+    );
   }
 
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -56,12 +84,18 @@ export async function POST(request: Request): Promise<NextResponse> {
     httpOnly: true,
     sameSite: "lax",
     /**
-     * `false`, and TypeScript proves why: the guard above already returned in production, so
-     * `NODE_ENV === "production"` is unreachable here and a conditional flag would be dead code.
-     * Local development is plain http. The real session cookie (phase 3 step 03, Supabase) is set
-     * elsewhere and *is* `secure`.
+     * Now conditional, and it has to be.
+     *
+     * This was a hard `false` with a comment arguing the production branch was unreachable — true
+     * while the guard above returned unconditionally in production, and **false the moment
+     * `ALLOW_DEV_SIGNIN` made a production build reachable**. A bearer token sent without `Secure`
+     * over a deployed site is a token that will travel over plain http if anything ever downgrades
+     * the connection.
+     *
+     * Local development is plain http, so `false` there — a `Secure` cookie is simply dropped on
+     * `http://localhost` and sign-in would break with no visible reason.
      */
-    secure: false,
+    secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: expiresIn,
   });

@@ -2,10 +2,10 @@
   "$schema": "https://schema.railpack.com",
   "steps": {
     "build": {
-      "inputs": [{ "step": "install" }],
       "commands": [
+        "pnpm --filter @repo/contracts build",
         "pnpm --filter @repo/api exec prisma generate",
-        "pnpm turbo run build --filter=@repo/api..."
+        "pnpm --filter @repo/api build"
       ]
     }
   },

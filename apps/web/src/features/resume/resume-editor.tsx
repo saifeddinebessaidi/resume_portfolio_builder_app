@@ -366,8 +366,16 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
            * the user merely tabbed past should not trigger a write.
            */}
           <div onBlur={onFormBlur}>
-            {/* Every section the builder's editor had. Controlled: it owns no state and never saves. */}
-            <ResumeForm value={draft} onChange={setDraft} />
+            {/**
+             * Every section the builder's editor had. Controlled: it owns no state and never saves.
+             *
+             * `onFlush` is the one exception to "never saves", and it is load-bearing rather than
+             * plumbing: the Profil generator posts to an endpoint that reads the payload **the server
+             * has stored**, so the form has to be able to commit what is on screen before asking for a
+             * paragraph about it. Without it the model is handed the previous version — type an
+             * experience, press Générer, get a Profil written as if that experience did not exist.
+             */}
+            <ResumeForm value={draft} onChange={setDraft} projectId={project.id} onFlush={flush} />
           </div>
         </Card>
 

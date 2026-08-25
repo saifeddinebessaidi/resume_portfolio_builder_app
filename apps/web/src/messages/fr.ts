@@ -376,6 +376,17 @@ export const messages = {
      */
     generateFallbackNote:
       "Brouillon simple — la rédaction par IA n'est pas disponible pour le moment. Vous pouvez réessayer plus tard.",
+    /**
+     * Shown when the once-per-CV rule has been lifted for this deployment
+     * (`ALLOW_RESUME_REGENERATE=true`).
+     *
+     * It names the reason. A button that stays live after "génération plus disponible pour ce CV" would
+     * otherwise read as the limit being broken rather than deliberately relaxed.
+     */
+    regenerateEnabled:
+      "Régénération activée sur cet environnement (test) — relancer remplacera le résumé actuel.",
+    /** Asked before a regeneration overwrites a résumé the user may have edited by hand. */
+    generateConfirm: "La génération va remplacer le résumé actuel. Continuer ?",
     /** Shown once the single generation is spent. Says what is still possible, not only what is not. */
     generatedNote:
       "Résumé déjà généré une fois. Modifiez-le ou réécrivez-le librement — la génération n'est plus disponible pour ce CV.",

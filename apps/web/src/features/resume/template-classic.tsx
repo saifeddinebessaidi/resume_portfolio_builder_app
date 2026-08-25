@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   AVOID_BREAK,
   Bullets,
+  ContactValue,
   GhostLines,
   Ph,
   SANS,
@@ -99,7 +100,11 @@ export function TemplateClassic({
             }}
           >
             {contact.length > 0
-              ? contact.map((c) => <span key={c.key}>{c.value}</span>)
+              ? contact.map((c) => (
+                  <span key={c.key}>
+                    <ContactValue line={c} />
+                  </span>
+                ))
               : [t.phPhone, t.phEmail, t.phLocation].map((label) => (
                   <span key={label} style={{ opacity: 0.34 }} aria-hidden>
                     {label}

@@ -175,12 +175,27 @@ export const projectsApi = {
   /**
    * Generates the CV's « Profil » paragraph and returns it — writing nothing, like the portfolio one.
    *
-   * No body: a Profil is generated once per CV, so there is no "yes, overwrite" for the caller to send.
+   * The endpoint reads no body: a Profil is generated once per CV, so there is no "yes, overwrite" for
+   * the caller to record.
+   *
+   * **`body: {}` is sent anyway, and it is not decorative.** `request` sets `content-type:
+   * application/json` on every call, and omits the body only when `body` is `undefined` — and Fastify
+   * rejects that exact pairing with `400 FST_ERR_CTP_EMPTY_JSON_BODY`, "Body cannot be empty when
+   * content-type is set to 'application/json'". So a POST with nothing to say still has to say `{}`.
+   *
+   * Worth recording how this got shipped: it was tested with `curl`, which sent no `content-type` at
+   * all, so Fastify never attempted to parse and the call returned 200. The browser sets the header on
+   * every request and got a 400 for the same endpoint. A test that omits a header the real client
+   * always sends is not testing the real client.
+   *
+   * The deeper fix is for `request` not to announce a content type it is not sending, but that changes
+   * every call in the app; this keeps the blast radius at one endpoint.
    */
   generateResumeSummary: (id: string): Promise<GeneratedResumeSummary> =>
     request({
       path: ROUTES.projects.resumeSummary(id),
       method: "POST",
+      body: {},
       schema: generatedResumeSummarySchema,
     }),
 

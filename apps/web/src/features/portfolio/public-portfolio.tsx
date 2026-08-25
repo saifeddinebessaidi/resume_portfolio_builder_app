@@ -664,13 +664,29 @@ function ProjectDetail({ work, image }: { work: PortfolioWork; image: string | n
 }
 
 /**
- * One video in the reel.
+ * One video in the reel — **presented like the cover, not like a player.**
  *
- * `controls` and **no autoplay**: several videos autoplaying as a visitor scrolls is a bandwidth and
- * attention disaster, and it is the opposite of the cover, which is a silent background. `preload="none"`
- * so a page with six videos downloads none of them until one is asked for — only the poster loads.
+ * Autoplaying, muted, looping, no controls and no caption, matching the hero in `portfolio-motion.tsx`.
+ * The page then reads as one continuous piece of motion rather than a hero followed by a row of video
+ * widgets with grey chrome and filenames under them.
  *
- * The border and label follow the Projets cards so the section reads as part of the same page.
+ * ## What this deliberately gives up
+ *
+ * The previous version had `controls` and `preload="none"`, and the reasoning behind it was real: a page
+ * with six videos that all autoplay downloads six videos, and on a phone that is somebody's data. That
+ * cost is now accepted for the sake of the design.
+ *
+ * Three things keep it from being reckless, and they are why this is safe enough to do:
+ *
+ * - **`muted` is mandatory**, not stylistic. Every browser blocks autoplay with sound; without it the
+ *   video silently refuses to start and the section renders as a still frame.
+ * - **`preload="metadata"`**, as the hero uses — the poster and dimensions load, the video body does not
+ *   until playback begins.
+ * - **`poster`** still renders first, so a blocked or slow video shows the intended frame rather than a
+ *   black rectangle.
+ *
+ * If the reel grows past three or four videos this should become play-on-scroll-into-view via
+ * `IntersectionObserver` — same appearance, but only the visible video is fetched.
  */
 function VideoFigure({ video }: { video: PortfolioVideo }): ReactNode {
   return (
@@ -678,29 +694,18 @@ function VideoFigure({ video }: { video: PortfolioVideo }): ReactNode {
       <video
         src={video.assetUrl}
         poster={video.posterUrl}
-        controls
+        autoPlay
+        muted
+        loop
         playsInline
-        preload="none"
+        preload="metadata"
+        // The title is no longer painted on the page, so it becomes the accessible name instead of
+        // being dropped — a silent, unlabelled, uncontrollable video is invisible to a screen reader.
+        aria-label={video.title?.trim() ? capitalizeFirst(video.title) : undefined}
         className="aspect-video w-full bg-black object-cover"
       />
-      {video.title?.trim() ? (
-        <figcaption className="flex items-baseline justify-between gap-4 px-5 py-4">
-          <span className="font-serif text-xl sm:text-2xl">{capitalizeFirst(video.title)}</span>
-          {video.durationSeconds ? (
-            <span className="font-mono text-xs text-white/40">
-              {formatDuration(video.durationSeconds)}
-            </span>
-          ) : null}
-        </figcaption>
-      ) : null}
     </figure>
   );
-}
-
-/** 95 → "1:35". */
-function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  return `${String(minutes)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function SocialRow({

@@ -28,6 +28,7 @@ export function ResumeForm({
   onChange,
   projectId,
   onFlush,
+  allowRegenerate = false,
 }: {
   value: ResumePayload;
   onChange: (next: ResumePayload) => void;
@@ -35,6 +36,8 @@ export function ResumeForm({
   projectId: string;
   /** The editor's autosave flush. Awaited before generating — see `SummarySection`. */
   onFlush: () => Promise<void>;
+  /** Testing escape hatch: lets the Profil be generated more than once. Off by default. */
+  allowRegenerate?: boolean;
 }): ReactNode {
   const set = <K extends keyof ResumePayload>(key: K, v: ResumePayload[K]) =>
     onChange({ ...value, [key]: v });
@@ -300,6 +303,7 @@ export function ResumeForm({
         value={value}
         projectId={projectId}
         onFlush={onFlush}
+        allowRegenerate={allowRegenerate}
         onChangeSummary={(summary) => set("summary", summary)}
         onGenerate={(summary, spend) =>
           // Both fields in one update: two sequential `set` calls would each spread the *stale* `value`,
@@ -340,12 +344,14 @@ function SummarySection({
   value,
   projectId,
   onFlush,
+  allowRegenerate,
   onChangeSummary,
   onGenerate,
 }: {
   value: ResumePayload;
   projectId: string;
   onFlush: () => Promise<void>;
+  allowRegenerate: boolean;
   onChangeSummary: (summary: string) => void;
   /** `spend` marks whether this draft consumes the CV's single generation. */
   onGenerate: (summary: string, spend: boolean) => void;
@@ -366,10 +372,30 @@ function SummarySection({
    * next to the export counter — see the note on `summaryGenerated` in the payload schema.
    */
   const alreadyGenerated = value.summaryGenerated;
-  const disabled = !readiness.ready || alreadyGenerated || pending;
+
+  /**
+   * `allowRegenerate` lifts the once-per-CV rule for a deployment being tested — iterating on the
+   * generator means running it repeatedly against the same CV, and the flag that stops that lives in the
+   * payload, so it survives reloads and cannot be cleared from the UI.
+   *
+   * It relaxes **only** that clause. Readiness still gates, and a request in flight still gates.
+   */
+  const spent = alreadyGenerated && !allowRegenerate;
+  const disabled = !readiness.ready || spent || pending;
 
   const generate = async (): Promise<void> => {
     if (disabled) return;
+
+    /**
+     * Confirm before overwriting, and only when there is something to overwrite.
+     *
+     * Reachable solely with `allowRegenerate` on — the button is disabled after one generation
+     * otherwise. Without it a second press would silently discard a paragraph the user may have spent
+     * ten minutes editing, which is exactly the accident the portfolio button's confirm prevents.
+     */
+    if (alreadyGenerated && (value.summary ?? "").trim().length > 0) {
+      if (!window.confirm(messages.resume.generateConfirm)) return;
+    }
 
     setPending(true);
     setFellBack(false);
@@ -409,6 +435,9 @@ function SummarySection({
   const hint = (): string => {
     if (pending) return messages.resume.generating;
     if (fellBack) return messages.resume.generateFallbackNote;
+    // Says *why* the button is still live after a generation, so the relaxed rule is visible rather
+    // than looking like the once-per-CV limit silently failing.
+    if (alreadyGenerated && allowRegenerate) return messages.resume.regenerateEnabled;
     if (alreadyGenerated) return messages.resume.generatedNote;
     if (readiness.missingTitle) return messages.resume.generateNeedsTitle;
     if (!readiness.ready) {

@@ -418,6 +418,79 @@ export function resumeCompletion(data: ResumePayload): ResumeCompletion {
   return { percent: Math.round(earned), steps };
 }
 
+/* ------------------------------------------------------------------------------------------------
+ * Profil generation readiness
+ *
+ * Moved here from the web app's `summary-generator.ts` when the Profil started being written by the
+ * model rather than by a string template. It has to be **one** definition for the same reason
+ * `resumeCompletion` does, and for one more: the button that shows the rule and the endpoint that
+ * enforces it are now in different processes. A disabled button stops nobody holding `curl`, and a
+ * generation from a job title alone produces fluent invention — which is worse than an empty field,
+ * because it looks finished.
+ *
+ * The threshold and the four sections are unchanged from the deterministic version.
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * The four content sections the Profil draws on. The job title is handled separately — it opens the
+ * paragraph rather than supplying material for it.
+ */
+export const SUMMARY_SOURCE_SECTIONS = ["experiences", "skills", "education", "languages"] as const;
+
+export type SummarySourceSection = (typeof SUMMARY_SOURCE_SECTIONS)[number];
+
+/**
+ * **How many of those four must carry content before a Profil can be written.**
+ *
+ * Three of four. A summary written from one section is not a summary, it is that section rephrased:
+ * with `expériences` alone the output is "Manager. A travaillé chez Acme." — words the reader already
+ * has above it. Three is the point at which there is enough to *combine*, which is the only thing that
+ * makes the paragraph worth more than the fields it came from.
+ *
+ * It is also the honest gate for the model: the same threshold decides whether there is enough context
+ * to write something faithful rather than padding.
+ */
+export const SUMMARY_MIN_SECTIONS = 3;
+
+export interface SummaryReadiness {
+  ready: boolean;
+  /** The job title, which opens the summary. Missing means no sentence can start. */
+  missingTitle: boolean;
+  /** Which of the four source sections are still empty, for the UI to name. */
+  missing: SummarySourceSection[];
+  /** How many carry content, and how many are needed — so the hint can count down. */
+  filled: number;
+  required: number;
+}
+
+/** A section counts only when it holds real content — an empty card the user added does not. */
+function summarySectionHasContent(data: ResumePayload, section: SummarySourceSection): boolean {
+  switch (section) {
+    case "experiences":
+      return data.experiences.some((e) => filled(e.title));
+    case "skills":
+      return data.skills.some((g) => g.items.some((i) => filled(i)));
+    case "education":
+      return data.education.some((e) => filled(e.degree));
+    case "languages":
+      return data.languages.some((l) => filled(l.name));
+  }
+}
+
+export function summaryReadiness(data: ResumePayload): SummaryReadiness {
+  const missing = SUMMARY_SOURCE_SECTIONS.filter((s) => !summarySectionHasContent(data, s));
+  const filledCount = SUMMARY_SOURCE_SECTIONS.length - missing.length;
+  const missingTitle = !filled(data.title);
+
+  return {
+    ready: !missingTitle && filledCount >= SUMMARY_MIN_SECTIONS,
+    missingTitle,
+    missing: [...missing],
+    filled: filledCount,
+    required: SUMMARY_MIN_SECTIONS,
+  };
+}
+
 /**
  * What `GET /uploads/signature` returns — the parameters a browser needs to `POST` a file straight to
  * Cloudinary, and nothing else.

@@ -291,9 +291,28 @@ export class ProjectsController {
     };
   }
 
+  /**
+   * **No `@RequireEntitlement` here, deliberately — it made re-publishing impossible.**
+   *
+   * This endpoint is publish *and* re-publish: `PublishProjectUseCase` looks for an existing
+   * publication first and, when it finds one, updates `isPublic` and returns the same slug without
+   * touching `PUBLICATION_SLOT`. Re-generating a link an owner already holds costs no quota, which is
+   * the whole point of that branch.
+   *
+   * The guard cannot see that branch. It runs before the handler, reads the counter, and on a plan with
+   * `PUBLICATION_SLOT = 1` refuses the moment the first publication exists — so the second press of
+   * « Régénérer le lien » on an already-published portfolio returned
+   * `403 ENTITLEMENT_EXHAUSTED — « Vous avez utilisé 1 sur 1 »`, for a request that would have spent
+   * nothing. Un-publishing and re-publishing was locked out the same way.
+   *
+   * Dropping the guard costs nothing that matters. It is documented as *not* being the authority, and
+   * every refusal it produced is still produced by the use case: `NoActiveSubscriptionError` before any
+   * slug work, and `ConsumeEntitlementService` — inside the transaction, which is the real gate —
+   * throwing the same `EntitlementExhaustedError`, with the same `limit`/`used`/`resetsAt`, when a
+   * *first* publication would exceed the plan.
+   */
   @Post(":id/publication")
   @HttpCode(201)
-  @RequireEntitlement({ key: EntitlementKey.PUBLICATION_SLOT, categoryFrom: "project" })
   async createPublication(
     @CurrentUser() user: User,
     @Param(zodPipe(projectIdParamSchema)) params: { id: string },

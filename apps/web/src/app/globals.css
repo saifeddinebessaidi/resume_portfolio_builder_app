@@ -264,6 +264,37 @@
   }
 }
 
+/**
+ * **Native `<select>` on a dark panel — the white, unreadable option list.**
+ *
+ * `color-scheme: dark` on `:root` fixes the scrollbar and the closed control, and is *not* enough for
+ * the popup. Chromium paints the option list from the select's own computed `background-color`, and
+ * `rc-input` gives it `color-mix(… 6%, transparent)` — a translucent colour, which the popup composites
+ * onto its own white ground. The text stays `var(--foreground)`, so every option renders near-white on
+ * near-white and the list looks empty.
+ *
+ * Two halves, both needed:
+ *
+ * 1. an **opaque** background on the control (`… 6%, var(--background)` — visually identical over the
+ *    panel, but no longer see-through), so nothing white can show through;
+ * 2. explicit colours on `option` / `optgroup`, which is the only thing Firefox honours for the popup.
+ *
+ * Written unlayered on purpose. `rc-input` is a Tailwind utility and utilities live in `@layer
+ * utilities`, which outranks anything in `@layer base` no matter how specific — so a base-layer rule
+ * would lose to `rc-input`'s `background` shorthand. Unlayered CSS beats every layer, which is exactly
+ * the relationship wanted here.
+ */
+select.rc-input {
+  background-color: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  color-scheme: dark;
+}
+
+select.rc-input option,
+select.rc-input optgroup {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+}
+
 @utility rc-gradient-text {
   background: var(--gradient-primary);
   -webkit-background-clip: text;

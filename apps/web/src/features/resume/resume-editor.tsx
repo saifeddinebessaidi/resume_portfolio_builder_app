@@ -250,7 +250,19 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
   }, [flush]);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]">
+    /**
+     * **The form column is the one that scrolls; the preview is pinned beside it.**
+     *
+     * `items-start` is what makes that possible at all: a grid item stretches to the row's height by
+     * default, and a `sticky` element inside a box that is already as tall as its tallest sibling has no
+     * room left to travel — it simply never sticks. Aligning the items to the top gives the preview a box
+     * of its own height, which `lg:sticky` can then pin.
+     *
+     * The form's track went from 420px to 560px on your ask. That comes straight out of the preview's
+     * track — the shell is `max-w-7xl` (1200px of content at `px-10`), so the two columns share a fixed
+     * budget and the sheet's zoom below is tuned to whatever is left.
+     */
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
       {/* ---------------- form ---------------- */}
       <div className="flex flex-col gap-4">
         <Card className="flex flex-col gap-6 p-6">
@@ -392,15 +404,41 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
       </div>
 
       {/* ---------------- live preview ---------------- */}
-      <div className="flex flex-col gap-3">
+      {/**
+       * Pinned from `lg` up, and **scrollable in its own right**.
+       *
+       * `top-20` clears the sticky navbar (`top-0`, `py-4`) rather than sliding under it. The height cap
+       * is what stops "pinned" from meaning "the bottom of the CV is unreachable": an A4 sheet is taller
+       * than any laptop viewport even zoomed out, so the column keeps its own scrollbar. The page scroll
+       * therefore moves the form only, and the sheet is scrolled deliberately when you want to look
+       * further down it.
+       *
+       * Below `lg` the grid is one column and none of this applies — a preview pinned above a form on a
+       * phone would eat the screen the form needs.
+       */}
+      <div className="flex flex-col gap-3 lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)]">
         {!clean ? (
           <p className="rounded-2xl border border-[color-mix(in_oklab,var(--accent)_40%,transparent)] bg-[color-mix(in_oklab,var(--accent)_10%,transparent)] px-4 py-2.5 text-xs">
             {messages.resume.watermarkNotice}
           </p>
         ) : null}
 
-        <div className="overflow-x-auto">
-          <div className="mx-auto w-fit origin-top scale-[0.55] sm:scale-75 lg:scale-[0.85]">
+        {/* `min-h-0` so this flex child may shrink below its content height — without it the cap above
+            is ignored and the column grows to the full sheet, taking the page scroll back with it. */}
+        <div className="min-h-0 flex-1 overflow-auto">
+          {/**
+           * **`zoom`, not `transform: scale`.**
+           *
+           * `scale` is paint-only: the sheet kept its full 210 × 297mm *layout* box whatever the factor,
+           * so a shrunken preview still reserved a full-size hole — dead space below it and a horizontal
+           * scrollbar beside it. That was survivable while the preview owned the wider track; with the
+           * form at 560px it is not. `zoom` scales the layout box too, so the column is exactly as big as
+           * the picture in it, at any sheet height.
+           *
+           * The factors are tuned to what each breakpoint actually leaves: ~616px of track at `lg`
+           * against a 210mm (≈794px) sheet, hence 0.74.
+           */}
+          <div className="mx-auto w-fit [zoom:0.4] sm:[zoom:0.62] lg:[zoom:0.74]">
             {/* Watermarked until a download has been paid for on this project. The flag comes from the
                 server-loaded project, not from client state. */}
             {/**

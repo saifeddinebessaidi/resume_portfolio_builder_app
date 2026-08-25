@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   AVOID_BREAK,
   Bullets,
+  ContactValue,
   GhostLines,
   Ph,
   Portrait,
@@ -83,7 +84,7 @@ export function TemplateAurora({
               {contact.length > 0
                 ? contact.map((c) => (
                     <p key={c.key} style={{ margin: "0 0 4mm" }}>
-                      {c.value}
+                      <ContactValue line={c} />
                     </p>
                   ))
                 : [t.phPhone, t.phEmail, t.phLocation].map((label) => (

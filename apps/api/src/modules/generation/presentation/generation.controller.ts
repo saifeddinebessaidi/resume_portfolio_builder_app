@@ -4,10 +4,12 @@ import {
   projectIdParamSchema,
   type GeneratePortfolioContentRequest,
   type GeneratedPortfolioContent,
+  type GeneratedResumeSummary,
 } from "@repo/contracts";
 
 import { CurrentUser } from "../../../common/decorators/current-user.decorator";
 import { GeneratePortfolioContentUseCase } from "../application/generate-portfolio-content.use-case";
+import { GenerateResumeSummaryUseCase } from "../application/generate-resume-summary.use-case";
 import { InternalError, RateLimitedError } from "../../../common/errors/errors";
 import { TextGenerationError } from "../domain/text-generator.port";
 import { type User } from "../../users/domain/user.entity";
@@ -34,7 +36,10 @@ import { zodPipe } from "../../../common/pipes/zod-validation.pipe";
  */
 @Controller("projects")
 export class GenerationController {
-  constructor(private readonly generate: GeneratePortfolioContentUseCase) {}
+  constructor(
+    private readonly generate: GeneratePortfolioContentUseCase,
+    private readonly generateSummary: GenerateResumeSummaryUseCase,
+  ) {}
 
   @Post(":id/portfolio-content")
   @HttpCode(200)
@@ -51,11 +56,45 @@ export class GenerationController {
     try {
       return await this.generate.execute({ projectId: params.id, userId: user.id });
     } catch (error) {
-      if (error instanceof TextGenerationError) {
-        if (error.retryable) throw new RateLimitedError(5);
-        throw new InternalError(error.message);
-      }
-      throw error;
+      throw asHttpError(error);
     }
   }
+
+  /**
+   * `POST /projects/:id/resume-summary` — the CV's « Profil » paragraph.
+   *
+   * **No body.** The portfolio route carries `replaceExisting` because regenerating there is normal and
+   * has to be asked for; a Profil is generated once per CV, so there is no second press to record.
+   */
+  @Post(":id/resume-summary")
+  @HttpCode(200)
+  async resumeSummary(
+    @CurrentUser() user: User,
+    @Param(zodPipe(projectIdParamSchema)) params: { id: string },
+  ): Promise<GeneratedResumeSummary> {
+    try {
+      return await this.generateSummary.execute({ projectId: params.id, userId: user.id });
+    } catch (error) {
+      throw asHttpError(error);
+    }
+  }
+}
+
+/**
+ * A generation failure as a status, shared by both routes.
+ *
+ * `retryable` is what decides. A timeout or a provider 5xx becomes `429` with a retry hint — the user
+ * should press the button again. "Not configured" is ours, so it becomes a `500` whose detail the
+ * exception filter genericises, with the real reason already in the log. Neither leaks the provider's
+ * own message, which can name the model, the account, or quota specifics.
+ *
+ * Anything that is not a `TextGenerationError` — a `NotFoundError`, a `ValidationFailedError`, a Zod
+ * failure — is returned untouched for the filter to map, exactly as before.
+ */
+function asHttpError(error: unknown): unknown {
+  if (error instanceof TextGenerationError) {
+    if (error.retryable) return new RateLimitedError(5);
+    return new InternalError(error.message);
+  }
+  return error;
 }

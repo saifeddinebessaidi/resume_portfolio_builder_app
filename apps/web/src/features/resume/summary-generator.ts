@@ -1,95 +1,44 @@
-import { type ResumePayload } from "@repo/contracts";
+import { summaryReadiness, type ResumePayload } from "@repo/contracts";
 
 /**
  * Composes a professional summary from what the user has already typed elsewhere.
  *
- * ## Why this is deterministic and not an LLM call
+ * ## This is now the **fallback**, not the generator
  *
- * It generates from the CV's **own** fields — job title, years of experience, employers, top skills,
- * highest qualification, languages — so it needs no API key, no provider decision, no per-click cost,
- * and it cannot invent a city, an employer or a degree the user never entered. That last property is the
- * one that matters: a fabricated line in a summary is a line the applicant has to defend in an
- * interview.
+ * The Profil is written by the model, server-side, at `POST /projects/:id/resume-summary`. This function
+ * runs only when that call fails — the server has no `AI_API_KEY`, or the provider was unreachable —
+ * and it exists so the button still does something useful on a deployment without generation
+ * configured. It does not spend the CV's single generation; see `SummarySection` in `resume-form.tsx`.
  *
- * An LLM would write more fluent prose, and the portfolio repository already contains a careful French
- * prompt for exactly this (with explicit anti-hallucination rules) that we could adopt. That is a real
- * upgrade and a scope decision — a provider, a key, a cost and a rate limit — rather than something to
- * slip in behind a button. This function is the shape that call would replace: same inputs, same output,
- * so swapping it is one import.
+ * ## Why it is kept rather than deleted
+ *
+ * It needs no key, no provider, no per-click cost, and it cannot invent a city, an employer or a degree
+ * the user never entered. That last property is the one that matters on a CV: a fabricated line is one
+ * the applicant has to defend in an interview.
+ *
+ * What it **cannot** do is write a summary. It re-emits the fields it is given, in a fixed order, so its
+ * output restates the sections printed directly beneath it — and it never reads `experiences[].bullets`,
+ * which is the only material describing what the person actually does. That limitation is structural,
+ * not a matter of better wording, and it is precisely why the model call now sits in front of it.
  *
  * ## It never overwrites silently
  *
  * The caller decides. The button is the user asking for a draft, and the text lands in an editable
  * field — a generator that quietly replaced a hand-written summary would destroy the better version.
- */
-
-/**
- * The four content sections the generator draws on. The title is handled separately — it opens the
- * sentence rather than supplying material for it.
- */
-export const SUMMARY_SOURCE_SECTIONS = ["experiences", "skills", "education", "languages"] as const;
-
-export type SummarySourceSection = (typeof SUMMARY_SOURCE_SECTIONS)[number];
-
-/**
- * **How many of those four must carry content before the button unlocks.**
  *
- * Three of four, by your call, and the reason is worth stating: a summary written from one section is
- * not a summary, it is that section rephrased. With `expérience` alone the output is "Manager. A
- * travaillé chez Acme." — three words the reader already has above it. Three sections is the point at
- * which there is enough to *combine*, which is the only thing that makes a generated paragraph worth
- * more than the fields it came from.
- *
- * It is also the honest gate for the AI version: the same threshold decides whether a model would have
- * enough context to write something faithful rather than padding.
+ * `summaryReadiness` moved to `@repo/contracts` when the server started enforcing the same gate: a
+ * disabled button stops nobody with `curl`, and one definition is what keeps the hint and the endpoint
+ * from disagreeing.
  */
-export const SUMMARY_MIN_SECTIONS = 3;
-
-export interface SummaryReadiness {
-  ready: boolean;
-  /** The job title, which opens the summary. Missing means no sentence can start. */
-  missingTitle: boolean;
-  /** Which of the four source sections are still empty, for the UI to name. */
-  missing: SummarySourceSection[];
-  /** How many carry content, and how many are needed — so the hint can count down. */
-  filled: number;
-  required: number;
-}
-
-/** A section counts only when it holds real content — an empty card the user added does not. */
-function sectionHasContent(data: ResumePayload, section: SummarySourceSection): boolean {
-  switch (section) {
-    case "experiences":
-      return data.experiences.some((e) => (e.title ?? "").trim().length > 0);
-    case "skills":
-      return data.skills.some((g) => g.items.some((i) => i.trim().length > 0));
-    case "education":
-      return data.education.some((e) => (e.degree ?? "").trim().length > 0);
-    case "languages":
-      return data.languages.some((l) => (l.name ?? "").trim().length > 0);
-  }
-}
-
-export function summaryReadiness(data: ResumePayload): SummaryReadiness {
-  const missing = SUMMARY_SOURCE_SECTIONS.filter((s) => !sectionHasContent(data, s));
-  const filled = SUMMARY_SOURCE_SECTIONS.length - missing.length;
-  const missingTitle = data.title.trim().length === 0;
-
-  return {
-    ready: !missingTitle && filled >= SUMMARY_MIN_SECTIONS,
-    missingTitle,
-    missing: [...missing],
-    filled,
-    required: SUMMARY_MIN_SECTIONS,
-  };
-}
 
 const COPY = {
   fr: {
     opener: (title: string) => `${title}`,
     withYears: (years: number) =>
       years >= 2 ? ` avec ${String(years)} ans d'expérience` : " en début de parcours",
-    basedIn: (location: string) => ` basé(e) à ${location}`,
+    // "basé(e) à" was the previous wording. The parenthesised agreement is the kind of thing a reader
+    // notices on a CV, and "à Tunis" carries the same information without it.
+    basedIn: (location: string) => ` à ${location}`,
     employers: (names: string[]) =>
       names.length === 1
         ? `A travaillé chez ${names[0]}.`
@@ -161,9 +110,25 @@ export function generateSummary(data: ResumePayload, now = new Date().getFullYea
   ].slice(0, 3);
   if (employers.length > 0) sentences.push(t.employers(employers));
 
-  // 3. Top skills, flattened across groups. Capped at six for the same reason.
+  /**
+   * 3. Top skills, flattened across groups. Capped at six for the same reason.
+   *
+   * Trailing punctuation is stripped from each item before joining. Users type skills with a full stop
+   * on the end often enough — "Planification stratégique." — and the sentence template appends its own,
+   * which produced the reported "Hubspot & Dynamics 365.." and a comma list that read as separate
+   * sentences.
+   */
   const skills = data.skills
-    .flatMap((g) => g.items.map((i) => i.trim()).filter(Boolean))
+    .flatMap((g) =>
+      g.items
+        .map((i) =>
+          i
+            .trim()
+            .replace(/[.;,]+$/, "")
+            .trim(),
+        )
+        .filter(Boolean),
+    )
     .slice(0, 6);
   if (skills.length > 0) sentences.push(t.skills(skills));
 

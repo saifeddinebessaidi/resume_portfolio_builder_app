@@ -29,7 +29,9 @@ import {
   publicPublicationSchema,
   type PublicPublication,
   generatedPortfolioContentSchema,
+  generatedResumeSummarySchema,
   type GeneratedPortfolioContent,
+  type GeneratedResumeSummary,
   type GeneratePortfolioContentRequest,
 } from "@repo/contracts";
 
@@ -168,6 +170,18 @@ export const projectsApi = {
       method: "POST",
       body,
       schema: generatedPortfolioContentSchema,
+    }),
+
+  /**
+   * Generates the CV's « Profil » paragraph and returns it — writing nothing, like the portfolio one.
+   *
+   * No body: a Profil is generated once per CV, so there is no "yes, overwrite" for the caller to send.
+   */
+  generateResumeSummary: (id: string): Promise<GeneratedResumeSummary> =>
+    request({
+      path: ROUTES.projects.resumeSummary(id),
+      method: "POST",
+      schema: generatedResumeSummarySchema,
     }),
 
   create: (body: { categoryCode: CategoryCode; title?: string; data?: Record<string, unknown> }) =>

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   AVOID_BREAK,
   Bullets,
+  ContactValue,
   GhostLines,
   Ph,
   SANS,
@@ -113,7 +114,7 @@ export function TemplateNavy({
                 {contact.length > 0
                   ? contact.map((c) => (
                       <p key={c.key} style={{ margin: "0 0 2.5mm", fontSize: "8.5pt" }}>
-                        {c.value}
+                        <ContactValue line={c} />
                       </p>
                     ))
                   : [t.phPhone, t.phEmail, t.phLocation].map((label) => (

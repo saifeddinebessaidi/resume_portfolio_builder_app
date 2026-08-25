@@ -47,6 +47,13 @@ export const ROUTES = {
      * endpoint, which is what stops it being an open proxy to a billable model.
      */
     portfolioContent: (id: string) => `/projects/${id}/portfolio-content`,
+    /**
+     * Writes the CV's « Profil » paragraph. Scoped under the project for the same reason as
+     * `portfolioContent`: generation reads that project's stored payload and is authorised by owning
+     * it, so there is no "generate from arbitrary input" endpoint to use as an open proxy to a
+     * billable model.
+     */
+    resumeSummary: (id: string) => `/projects/${id}/resume-summary`,
   },
 
   public: {

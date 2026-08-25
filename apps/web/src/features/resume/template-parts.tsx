@@ -2,6 +2,7 @@ import { type ResumePayload } from "@repo/contracts";
 import type { CSSProperties, ReactNode } from "react";
 
 import { capitalizeFirst, capitalizeSentences, properName } from "@/lib/display-text";
+import { PROFILE_LINK_LABEL, absoluteUrl, isProfileLinkKey } from "./links";
 import { labelsFor } from "./ats-template";
 
 /**
@@ -45,19 +46,60 @@ export const SANS = "Arial, Helvetica, sans-serif";
 export const SERIF = "Georgia, 'Times New Roman', serif";
 
 /**
+ * One printed contact line: the text to show, and — for a profile link — the address behind it.
+ *
+ * `href` is absent for a phone number, an email or a city. `exactOptionalPropertyTypes` is on, so those
+ * lines omit the key entirely rather than setting it to `undefined`, which is what lets `ContactValue`
+ * branch on its presence.
+ */
+export interface ContactLine {
+  key: string;
+  value: string;
+  href?: string;
+}
+
+/**
  * The contact lines, in the order every one of these designs shows them.
  *
  * Returned as data rather than markup because each template decorates them differently — icons in a
  * sidebar, a centred row, a bordered strip — and only the *selection and order* is shared.
+ *
+ * **A profile link's `value` is its network's name, not its URL** — "LinkedIn", not
+ * `https://www.linkedin.com/in/…`. The address moves to `href`, so it is still in the PDF and still
+ * clickable, without spending three wrapped lines of a 68mm sidebar to say it. See `links.ts` for why,
+ * and for what that costs on a printout.
  */
-export function contactLines(data: ResumePayload): { key: string; value: string }[] {
+export function contactLines(data: ResumePayload): ContactLine[] {
   return [
     { key: "phone", value: data.phone ?? "" },
     { key: "email", value: data.email },
     { key: "location", value: data.location ?? "" },
     { key: "website", value: data.website ?? "" },
     { key: "linkedin", value: data.linkedin ?? "" },
-  ].filter((l) => l.value.trim().length > 0);
+  ]
+    .filter((l) => l.value.trim().length > 0)
+    .map((l): ContactLine =>
+      isProfileLinkKey(l.key)
+        ? { key: l.key, value: PROFILE_LINK_LABEL[l.key], href: absoluteUrl(l.value.trim()) }
+        : l,
+    );
+}
+
+/**
+ * A contact line's text — as a link when it has one.
+ *
+ * Exists so the six designs share one answer to "is this clickable?" while keeping their own answer to
+ * "what does it look like?": the anchor inherits colour and underline from whatever the template wrapped
+ * it in, so adding it changed no design.
+ */
+export function ContactValue({ line }: { line: ContactLine }): ReactNode {
+  if (line.href === undefined) return line.value;
+
+  return (
+    <a href={line.href} style={{ color: "inherit", textDecoration: "none" }}>
+      {line.value}
+    </a>
+  );
 }
 
 /** Splits a full name so a template can weight the surname differently, as two of the three designs do. */

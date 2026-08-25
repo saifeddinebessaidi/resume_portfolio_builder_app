@@ -1,12 +1,12 @@
 "use client";
 
-import { type ResumePayload } from "@repo/contracts";
+import { summaryReadiness, type ResumePayload } from "@repo/contracts";
 import { Sparkles } from "lucide-react";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { Bullets, CommaList, Field, ItemCard, Section, TextArea, TextInput } from "./editor-parts";
 import { Button } from "@/components/ui/button";
-import { generateSummary, summaryReadiness } from "./summary-generator";
+import { generateSummary } from "./summary-generator";
 import { messages } from "@/messages/fr";
 
 /**
@@ -26,9 +26,15 @@ type ArrayKey = "experiences" | "skills" | "projects" | "languages" | "education
 export function ResumeForm({
   value,
   onChange,
+  projectId,
+  onFlush,
 }: {
   value: ResumePayload;
   onChange: (next: ResumePayload) => void;
+  /** Needed only by the Profil generator, which posts to `/api/projects/:id/resume-summary`. */
+  projectId: string;
+  /** The editor's autosave flush. Awaited before generating — see `SummarySection`. */
+  onFlush: () => Promise<void>;
 }): ReactNode {
   const set = <K extends keyof ResumePayload>(key: K, v: ResumePayload[K]) =>
     onChange({ ...value, [key]: v });
@@ -292,11 +298,16 @@ export function ResumeForm({
        */}
       <SummarySection
         value={value}
+        projectId={projectId}
+        onFlush={onFlush}
         onChangeSummary={(summary) => set("summary", summary)}
-        onGenerate={(summary) =>
+        onGenerate={(summary, spend) =>
           // Both fields in one update: two sequential `set` calls would each spread the *stale* `value`,
           // and the second would discard the first.
-          onChange({ ...value, summary, summaryGenerated: true })
+          //
+          // `spend` is false when the text came from the local fallback rather than the model — see the
+          // note on `SummarySection`. The summary lands either way; only the one-shot flag differs.
+          onChange({ ...value, summary, summaryGenerated: spend })
         }
       />
     </div>
@@ -306,20 +317,42 @@ export function ResumeForm({
 /**
  * The summary field and its generator.
  *
- * Its own component because it is the one section holding local state — `justGenerated`, for the
- * confirmation line. Keeping that out of `ResumeForm` means a keystroke in any other field does not
+ * Its own component because it is the one section holding local state — the pending flag and the
+ * fallback notice. Keeping that out of `ResumeForm` means a keystroke in any other field does not
  * re-render around it.
+ *
+ * ## The Profil is written by the model, on the server
+ *
+ * It used to be composed here, in the browser, by a string template — which is why it read as a list of
+ * facts the CV already showed underneath it. It now posts to `/api/projects/:id/resume-summary`, which
+ * runs the same LLM pipeline the portfolio generator uses. `summary-generator.ts` stays as the offline
+ * fallback and nothing else.
+ *
+ * ## Why the autosave flush is awaited first
+ *
+ * The endpoint generates from the payload the server has **stored**, so anything typed and not yet
+ * saved is invisible to it. Pressing the button blurs the field, which starts an autosave — so without
+ * awaiting it the model would be handed the *previous* version: type an experience, press Générer, get
+ * a Profil written as if that experience did not exist. The portfolio button hit exactly this bug and
+ * carries the same `await`.
  */
 function SummarySection({
   value,
+  projectId,
+  onFlush,
   onChangeSummary,
   onGenerate,
 }: {
   value: ResumePayload;
+  projectId: string;
+  onFlush: () => Promise<void>;
   onChangeSummary: (summary: string) => void;
-  onGenerate: (summary: string) => void;
+  /** `spend` marks whether this draft consumes the CV's single generation. */
+  onGenerate: (summary: string, spend: boolean) => void;
 }): ReactNode {
   const readiness = useMemo(() => summaryReadiness(value), [value]);
+  const [pending, setPending] = useState(false);
+  const [fellBack, setFellBack] = useState(false);
 
   /**
    * **One generation per CV.** `summaryGenerated` lives in the payload, so the button stays spent across
@@ -327,18 +360,55 @@ function SummarySection({
    *
    * The text remains fully editable afterwards. What is spent is the *generator*, not the field: the
    * intent is to stop someone re-rolling the same paragraph instead of improving it.
+   *
+   * Worth being explicit that this is a UX rule and not enforcement: the payload is client-writable, so
+   * the server does not know a generation has been spent. If it ever needs to be enforced it belongs
+   * next to the export counter — see the note on `summaryGenerated` in the payload schema.
    */
   const alreadyGenerated = value.summaryGenerated;
-  const disabled = !readiness.ready || alreadyGenerated;
+  const disabled = !readiness.ready || alreadyGenerated || pending;
 
-  const generate = () => {
+  const generate = async (): Promise<void> => {
     if (disabled) return;
-    const draft = generateSummary(value);
-    if (!draft) return;
-    onGenerate(draft);
+
+    setPending(true);
+    setFellBack(false);
+
+    try {
+      // See the note above: the server reads the stored payload, not this component's `value`.
+      await onFlush();
+
+      const response = await fetch(`/api/projects/${projectId}/resume-summary`, { method: "POST" });
+      if (!response.ok) throw new Error("generation failed");
+
+      const { summary } = (await response.json()) as { summary: string };
+      if (summary.trim().length === 0) throw new Error("empty generation");
+
+      onGenerate(summary, true);
+    } catch {
+      /**
+       * **Any failure falls back to the local composer, and does not spend the one generation.**
+       *
+       * The failures worth naming are "the server has no `AI_API_KEY`" and "the provider timed out";
+       * both arrive here indistinguishably, and both are the server's problem rather than the user's.
+       * Burning their single shot on a paragraph the server could not write would be charging them for
+       * our outage — leaving the flag clear means pressing again once generation works gets the real
+       * thing.
+       *
+       * The deterministic draft is still worth showing: it is a weaker paragraph, but it is theirs, it
+       * is accurate, and it beats a blank field with an error over it.
+       */
+      const draft = generateSummary(value);
+      if (draft) onGenerate(draft, false);
+      setFellBack(true);
+    } finally {
+      setPending(false);
+    }
   };
 
   const hint = (): string => {
+    if (pending) return messages.resume.generating;
+    if (fellBack) return messages.resume.generateFallbackNote;
     if (alreadyGenerated) return messages.resume.generatedNote;
     if (readiness.missingTitle) return messages.resume.generateNeedsTitle;
     if (!readiness.ready) {
@@ -367,13 +437,14 @@ function SummarySection({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={generate}
-          // Disabled rather than hidden, in both cases: a button that vanishes teaches nothing, and the
-          // hint beside it says either which sections are still needed or that the one shot is spent.
+          onClick={() => void generate()}
+          // Disabled rather than hidden, in every case: a button that vanishes teaches nothing, and the
+          // hint beside it says which sections are still needed, that a draft is being written, or that
+          // the one shot is spent.
           disabled={disabled}
         >
           <Sparkles aria-hidden className="size-4" />
-          {messages.resume.generate}
+          {pending ? messages.resume.generating : messages.resume.generate}
         </Button>
 
         <p className="text-xs text-muted-foreground" aria-live="polite">

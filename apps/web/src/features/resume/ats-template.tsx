@@ -1,6 +1,7 @@
 import { type ResumePayload } from "@repo/contracts";
 
 import { GhostLines, Ph } from "./template-parts";
+import { PROFILE_LINK_KEYS, PROFILE_LINK_LABEL, absoluteUrl } from "./links";
 
 import { capitalizeFirst, capitalizeSentences, properName } from "@/lib/display-text";
 import type { ReactNode } from "react";
@@ -103,9 +104,6 @@ function AtsHeading({ children }: { children: string }): ReactNode {
   );
 }
 
-/** Users type "github.com/x" as often as the full URL; both have to become a working href. */
-const url = (v: string): string => (/^https?:\/\//i.test(v) ? v : `https://${v}`);
-
 function AtsHeader({
   data,
   placeholders: ph = false,
@@ -115,10 +113,22 @@ function AtsHeader({
 }): ReactNode {
   const t = labelsFor(data);
   const contact = [data.email, data.phone, data.location].filter(Boolean).join("  |  ");
-  const links: string[] = [];
-  if (data.website) links.push(`Portfolio: ${data.website}`);
-  if (data.github) links.push(`GitHub: ${data.github}`);
-  if (data.linkedin) links.push(`LinkedIn: ${data.linkedin}`);
+
+  /**
+   * The profile links, as **names rather than addresses** — "LinkedIn", not the forty-character URL that
+   * used to sit beside it. The address is the anchor's `href`, so it still reaches the PDF and is still
+   * clickable; what is gone is a header line that pushed the phone number and the city onto a second row.
+   *
+   * The label used to be printed *as well as* the URL ("LinkedIn: https://…"), which named the network
+   * twice. Now the label is the link.
+   */
+  const links = PROFILE_LINK_KEYS.map((key) => ({ key, raw: data[key] ?? "" }))
+    .filter((l) => l.raw.trim().length > 0)
+    .map((l) => ({
+      key: l.key,
+      label: PROFILE_LINK_LABEL[l.key],
+      href: absoluteUrl(l.raw.trim()),
+    }));
 
   return (
     <header style={{ marginBottom: "4pt" }}>
@@ -139,24 +149,14 @@ function AtsHeader({
       ) : null}
       {links.length > 0 ? (
         <div style={{ fontSize: "10pt", marginTop: "2pt" }}>
-          {links.map((l, i) => {
-            const at = l.indexOf(": ");
-            return (
-              <span key={l}>
-                {i > 0 ? "  |  " : null}
-                {at >= 0 ? (
-                  <>
-                    {l.slice(0, at + 2)}
-                    <a href={url(l.slice(at + 2))} style={{ color: "inherit" }}>
-                      {l.slice(at + 2)}
-                    </a>
-                  </>
-                ) : (
-                  l
-                )}
-              </span>
-            );
-          })}
+          {links.map((l, i) => (
+            <span key={l.key}>
+              {i > 0 ? "  |  " : null}
+              <a href={l.href} style={{ color: "inherit" }}>
+                {l.label}
+              </a>
+            </span>
+          ))}
         </div>
       ) : null}
     </header>
@@ -288,7 +288,7 @@ export function buildAtsBlocks(
                 {p.githubUrl ? (
                   <>
                     GitHub:{" "}
-                    <a href={url(p.githubUrl)} style={{ color: "inherit" }}>
+                    <a href={absoluteUrl(p.githubUrl)} style={{ color: "inherit" }}>
                       {p.githubUrl}
                     </a>
                   </>
@@ -297,7 +297,7 @@ export function buildAtsBlocks(
                 {p.demoUrl ? (
                   <>
                     Demo:{" "}
-                    <a href={url(p.demoUrl)} style={{ color: "inherit" }}>
+                    <a href={absoluteUrl(p.demoUrl)} style={{ color: "inherit" }}>
                       {p.demoUrl}
                     </a>
                   </>

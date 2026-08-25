@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 
 import { GenerationController } from "./generation.controller";
 import { GeneratePortfolioContentUseCase } from "../application/generate-portfolio-content.use-case";
+import { GenerateResumeSummaryUseCase } from "../application/generate-resume-summary.use-case";
 import { OpenAiCompatibleGenerator } from "../infrastructure/openai-compatible.generator";
 import { ProjectsModule } from "../../projects/presentation/projects.module";
 import { TEXT_GENERATOR } from "../domain/text-generator.port";
@@ -24,6 +25,7 @@ import { TEXT_GENERATOR } from "../domain/text-generator.port";
   controllers: [GenerationController],
   providers: [
     GeneratePortfolioContentUseCase,
+    GenerateResumeSummaryUseCase,
     { provide: TEXT_GENERATOR, useClass: OpenAiCompatibleGenerator },
   ],
 })

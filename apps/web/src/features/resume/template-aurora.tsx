@@ -16,7 +16,7 @@ import {
   languageLines,
   showSection,
 } from "./template-parts";
-import { capitalizeFirst, properName } from "@/lib/display-text";
+import { capitalizeFirst, capitalizeSentences, properName } from "@/lib/display-text";
 import { labelsFor } from "./ats-template";
 
 /**
@@ -160,6 +160,26 @@ export function TemplateAurora({
                 printColorAdjust: "exact",
               }}
             />
+
+            {/**
+             * **Profil, first — the same position it holds in every other design.**
+             *
+             * It was missing entirely: Aurora read experience, education and skills but never
+             * `data.summary`, so a summary written (or produced by the generator) simply had nowhere to
+             * land. It was still saved and still printed by the other six templates, which is what made
+             * it look like a generation failure rather than a renderer gap.
+             */}
+            {showSection(Boolean(data.summary?.trim()), ph) ? (
+              <StarSection title={t.summary}>
+                {data.summary?.trim() ? (
+                  <p style={{ margin: 0, fontSize: "9pt", color: MUTED, lineHeight: 1.5 }}>
+                    {capitalizeSentences(data.summary)}
+                  </p>
+                ) : (
+                  <GhostLines count={3} />
+                )}
+              </StarSection>
+            ) : null}
 
             {showSection(
               data.experiences.some((e) => e.title.trim()),

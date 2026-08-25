@@ -67,3 +67,33 @@ export interface PortfolioGenerationReadiness {
 
 /** How many of the four sources must be present. One is enough to ground the copy in something real. */
 export const PORTFOLIO_GENERATION_MIN_SOURCES = 1;
+
+/**
+ * `POST /projects/:id/resume-summary` — the CV's « Profil » paragraph.
+ *
+ * ## One field, and that is the whole safety argument
+ *
+ * The model returns `summary` and nothing else. Every other thing on a CV — the employers, the dates,
+ * the degree, the job titles — is a **claim the applicant will be asked to defend in an interview**,
+ * and a generator that could rewrite them would eventually move a date or promote someone a grade. As
+ * with the portfolio, narrowing the response shape is what makes that structurally impossible rather
+ * than a matter of how carefully the prompt is worded.
+ *
+ * ## Why it is prose and not a list
+ *
+ * The Profil is the one section of a CV that is *not* a list — every other section already is one. The
+ * generator this replaced was a string template, so it could only ever emit "Compétences principales :
+ * a, b, c. Formation : … Langues : …" — three lines restating three sections the reader can see for
+ * themselves, immediately below. The prompt forbids that shape explicitly.
+ *
+ * ## No request body
+ *
+ * Unlike the portfolio's `replaceExisting`, there is nothing to send: a Profil is generated once per CV,
+ * so there is no "yes, overwrite" for the client to record.
+ */
+export const generatedResumeSummarySchema = z.object({
+  /** Bounded to the payload's own `summary` limit, so generated text can never be too long to store. */
+  summary: z.string().max(4_000),
+});
+
+export type GeneratedResumeSummary = z.infer<typeof generatedResumeSummarySchema>;

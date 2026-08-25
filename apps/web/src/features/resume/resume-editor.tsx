@@ -57,7 +57,17 @@ import { messages } from "@/messages/fr";
  * `flush` sets a flag instead and re-reads the draft when the request lands, so bursts collapse into one
  * write and the last thing typed always arrives.
  */
-export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode {
+export function ResumeEditor({
+  project,
+  allowRegenerate = false,
+}: {
+  project: ProjectDetail;
+  /**
+   * Lets the Profil be generated more than once, for testing the generator. Off unless the deployment
+   * sets `ALLOW_RESUME_REGENERATE=true` — see the note where this is read, in the route's page.
+   */
+  allowRegenerate?: boolean;
+}): ReactNode {
   const initial = useMemo(
     // The stored payload is parsed rather than cast: an older `schemaVersion` may be missing fields
     // added since, and the schema's defaults fill them in instead of the editor rendering `undefined`.
@@ -375,7 +385,13 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
              * paragraph about it. Without it the model is handed the previous version — type an
              * experience, press Générer, get a Profil written as if that experience did not exist.
              */}
-            <ResumeForm value={draft} onChange={setDraft} projectId={project.id} onFlush={flush} />
+            <ResumeForm
+              value={draft}
+              onChange={setDraft}
+              projectId={project.id}
+              onFlush={flush}
+              allowRegenerate={allowRegenerate}
+            />
           </div>
         </Card>
 

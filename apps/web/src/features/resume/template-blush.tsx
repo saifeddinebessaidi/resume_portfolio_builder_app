@@ -4,13 +4,14 @@ import type { ReactNode } from "react";
 import {
   AVOID_BREAK,
   Bullets,
+  ContactValue,
+  GhostLines,
+  Ph,
   SANS,
   SERIF,
   SHEET,
   contactLines,
   dateRange,
-  GhostLines,
-  Ph,
   flatSkills,
   languageLines,
   showSection,
@@ -158,7 +159,7 @@ export function TemplateBlush({
                         key={c.key}
                         style={{ margin: "0 0 3pt", fontSize: "8.5pt", lineHeight: 1.45 }}
                       >
-                        {c.value}
+                        <ContactValue line={c} />
                       </p>
                     ))
                   : [t.phPhone, t.phEmail, t.phLocation].map((label) => (

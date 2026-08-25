@@ -362,7 +362,20 @@ export const messages = {
      */
     summaryPlaceholder:
       "Écrivez votre résumé professionnel ici — ou remplissez vos sections ci-dessus et cliquez sur « Générer le résumé » pour le composer automatiquement.",
-    generateHint: "Composé à partir de vos sections : expérience, compétences, formation, langues.",
+    generateHint:
+      "Rédigé par l'IA à partir de vos sections : expérience, compétences, formation, langues.",
+    /** While the request is in flight. The model call takes a few seconds; a silent button reads as broken. */
+    generating: "Rédaction en cours…",
+    /**
+     * Shown when the generation fell back to the local composer — the server has no `AI_API_KEY`, or the
+     * provider was unreachable.
+     *
+     * It says **both** things the user needs: what they are looking at is the basic version, and the
+     * button is still available. The one generation is deliberately not spent on a draft the server
+     * could not write properly, so pressing again once generation is configured gets the real thing.
+     */
+    generateFallbackNote:
+      "Brouillon simple — la rédaction par IA n'est pas disponible pour le moment. Vous pouvez réessayer plus tard.",
     /** Shown once the single generation is spent. Says what is still possible, not only what is not. */
     generatedNote:
       "Résumé déjà généré une fois. Modifiez-le ou réécrivez-le librement — la génération n'est plus disponible pour ce CV.",

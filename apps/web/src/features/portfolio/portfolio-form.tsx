@@ -2,7 +2,7 @@
 
 import { type PortfolioPayload } from "@repo/contracts";
 import { X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { GenerateContentButton } from "./generate-content-button";
@@ -28,9 +28,9 @@ import { messages } from "@/messages/fr";
  * ## The selects were white
  *
  * The reference pins `[color-scheme:light]` because that app is light-themed. Inheriting that literally is
- * what made the dropdowns render as white boxes on our obsidian panel. `color-scheme: dark` is the fix,
- * and it is the *native* mechanism — it tells the browser to paint the option list, its scrollbar and its
- * focus ring dark as well, which a `background-color` alone cannot reach.
+ * what made the dropdowns render as white boxes on our obsidian panel. `color-scheme: dark` was the first
+ * half of the fix; the second — an opaque control background and explicit `option` colours — lives in
+ * `globals.css`. See the `SELECT` constant below for why one is not enough without the other.
  *
  * ## What is deliberately absent
  *
@@ -44,11 +44,13 @@ import { messages } from "@/messages/fr";
 /**
  * Dark-scheme select, matching our inputs.
  *
- * `appearance-none` and a background colour are not enough on their own — without `color-scheme: dark` the
- * browser still draws the popup list in light colours, so the closed control matches the theme and the
- * open one does not.
+ * `color-scheme: dark` is necessary and **was not sufficient**: Chromium paints the open option list from
+ * the control's own `background-color`, and `rc-input`'s is translucent, so the popup composited it onto
+ * white and every option rendered white-on-white. The rest of the fix — an opaque control background and
+ * explicit `option` colours — is in `globals.css`, because it has to out-rank a Tailwind utility and
+ * cannot be expressed as one.
  */
-const SELECT = "rc-input !rounded-2xl !py-2 !text-sm [color-scheme:dark]";
+const SELECT = "rc-input !rounded-2xl !py-2 !text-sm";
 
 const GENDERS: [string, string][] = [
   ["", "—"],
@@ -261,20 +263,7 @@ export function PortfolioForm({
         </Row>
         <Row label={messages.portfolio.skillsLabel}>
           {/* Comma-separated in a textarea, as the reference has it — not a tag editor. */}
-          <Area
-            rows={2}
-            value={value.skills.join(", ")}
-            placeholder={messages.portfolio.skillsPlaceholder}
-            onChange={(v) =>
-              set(
-                "skills",
-                v
-                  .split(",")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              )
-            }
-          />
+          <SkillsField skills={value.skills} onChange={(skills) => set("skills", skills)} />
         </Row>
         <Row label={messages.portfolio.brandSummary}>
           <Area
@@ -566,6 +555,59 @@ function Area({
     />
   );
 }
+
+/**
+ * **Compétences — a text field you can actually type into.**
+ *
+ * The list is stored as `string[]` and was rendered straight from it: `value={skills.join(", ")}`, with
+ * every keystroke split on `,`, trimmed and emptied-filtered on the way back. That round trip is lossy at
+ * exactly the moment it matters. Type `Photo` then `,` and the parse yields `["Photo"]`, which re-renders
+ * as `"Photo"` — the comma is deleted under the cursor. The following space is eaten the same way, so a
+ * separator can never be entered and the whole list has to be typed as one run-on word.
+ *
+ * The fix is to stop deriving the input's value from the parsed array. The raw text is the state while
+ * the field is being edited; the array is what that text *means*, recomputed on every change for the
+ * payload. Both directions stay live — the parent still receives skills as it types, and no character is
+ * ever rewritten under the cursor.
+ *
+ * The buffer is still not the *only* source: "Générer le contenu" replaces `skills` from outside, and
+ * that has to appear here. So the rendered value is the buffer **while the buffer still means the list we
+ * were given**, and the list otherwise — one comparison per render, no syncing effect and no stale
+ * snapshot to invalidate. The next keystroke re-seeds the buffer from whatever is on screen.
+ */
+function SkillsField({
+  skills,
+  onChange,
+}: {
+  skills: string[];
+  onChange: (skills: string[]) => void;
+}): ReactNode {
+  const [buffer, setBuffer] = useState(() => skills.join(", "));
+
+  const text = sameList(parseSkills(buffer), skills) ? buffer : skills.join(", ");
+
+  return (
+    <Area
+      rows={2}
+      value={text}
+      placeholder={messages.portfolio.skillsPlaceholder}
+      onChange={(next) => {
+        setBuffer(next);
+        onChange(parseSkills(next));
+      }}
+    />
+  );
+}
+
+/** Trailing empties are dropped, so a trailing "," in the field is a separator, not a blank skill. */
+const parseSkills = (raw: string): string[] =>
+  raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+const sameList = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((item, i) => item === b[i]);
 
 /** The reference's bare `×`, given a real accessible name — a lone glyph reads as nothing aloud. */
 function RemoveButton({ onClick }: { onClick: () => void }): ReactNode {

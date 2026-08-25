@@ -70,7 +70,29 @@ export default async function ResumeEditorPage({
         </Badge>
       </div>
 
-      <ResumeEditor project={project} />
+      {/**
+       * **The regeneration escape hatch, for testing the Profil generator.**
+       *
+       * A Profil is generated once per CV, which is the right product rule and the wrong testing rule:
+       * iterating on the prompt means running it repeatedly against the same CV, and the flag that
+       * blocks that is in the payload, so it survives reloads and cannot be cleared from the UI.
+       *
+       * `ALLOW_RESUME_REGENERATE=true` opts back in, shaped deliberately like `ALLOW_DEV_SIGNIN`: an
+       * opt-in flag rather than a relaxed condition, so the default stays once-per-CV and turning it on
+       * is a decision someone made by name in a dashboard. Set it on the staging project, leave it unset
+       * everywhere else, and take it off before launch.
+       *
+       * Scoped to the **deployment**, not to an account. Hardcoding `demo@reacchy.com` would put a
+       * personal address in the application's control flow, where it would outlive the testing it was
+       * added for and quietly grant one user a rule nobody else has.
+       *
+       * Read here, in a server component, and passed down — so it needs no `NEXT_PUBLIC_` twin. Read
+       * per request rather than at module scope, for the reason recorded in `dev-signin/route.ts`.
+       */}
+      <ResumeEditor
+        project={project}
+        allowRegenerate={process.env.ALLOW_RESUME_REGENERATE === "true"}
+      />
     </div>
   );
 }

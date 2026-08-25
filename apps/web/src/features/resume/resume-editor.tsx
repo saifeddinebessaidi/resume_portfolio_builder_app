@@ -18,6 +18,7 @@ import { PhotoField } from "./photo-field";
 import { ProgressBar } from "@/features/dashboard/progress-bar";
 import { TemplatePicker } from "./template-picker";
 import { hasCleanCopy } from "./clean-copy";
+import { isUntouchedResume } from "./untouched";
 import { ResumeForm } from "./resume-form";
 import { ResumeSheet } from "./resume-sheet";
 import { messages } from "@/messages/fr";
@@ -114,6 +115,16 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
    * stopped enforcing in ADR-0013. Progress is the number a user filling in a CV actually wants.
    */
   const completion = useMemo(() => resumeCompletion(draft), [draft]);
+
+  /**
+   * **Placeholders are for an empty sheet only.**
+   *
+   * They answer "what does this template look like?", and once there is a CV on the page that question is
+   * already answered by the CV. Recomputed per keystroke on purpose: the bars have to disappear on the
+   * first character typed, not on the next save, or the preview spends the whole session disagreeing with
+   * the form beside it.
+   */
+  const untouched = useMemo(() => isUntouchedResume(draft), [draft]);
 
   /** Set when a blur arrives while a save is in flight, so the loop below comes back for it. */
   const queued = useRef(false);
@@ -442,13 +453,18 @@ export function ResumeEditor({ project }: { project: ProjectDetail }): ReactNode
             {/* Watermarked until a download has been paid for on this project. The flag comes from the
                 server-loaded project, not from client state. */}
             {/**
-             * `placeholders` is on **here only**.
+             * `placeholders` is on **here only, and only while the CV is empty**.
              *
-             * An empty CV would otherwise render as a blank page, which tells nobody anything about the
-             * template they just picked. The print route leaves the flag off, so a downloaded PDF can
-             * never contain "Votre nom" or a grey bar — see the note on `ResumeSheet`.
+             * A blank CV would otherwise render as a blank page, which tells nobody anything about the
+             * template they just picked — so an untouched sheet still shows its layout in faint labels and
+             * grey bars. As soon as anything is written they all go, together: the preview then holds the
+             * user's data and nothing else, and half-filled sections read as progress rather than as a
+             * document full of holes. See `isUntouchedResume`.
+             *
+             * The print route never passes the flag at all, so a downloaded PDF cannot contain "Votre
+             * nom" or a grey bar under any circumstances — see the note on `ResumeSheet`.
              */}
-            <ResumeSheet data={draft} watermark={!clean} placeholders />
+            <ResumeSheet data={draft} watermark={!clean} placeholders={untouched} />
           </div>
         </div>
       </div>

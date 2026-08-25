@@ -8,6 +8,7 @@ import {
 } from "@repo/contracts";
 
 import { NotFoundError, ValidationFailedError } from "../../../common/errors/errors";
+import { asList, asText } from "./coerce";
 import {
   PROJECT_REPOSITORY,
   type ProjectRepository,
@@ -190,27 +191,4 @@ function buildFactSheet(data: PortfolioPayload): string {
   if (socials.length > 0) add("Réseaux", socials.join(", "));
 
   return lines.join("\n");
-}
-
-/** A string, or paragraphs the model returned as an array. Anything else becomes empty. */
-function asText(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) {
-    return value
-      .filter((v): v is string => typeof v === "string")
-      .join("\n\n")
-      .trim();
-  }
-  return "";
-}
-
-/** An array of strings, or a comma-separated string the model returned instead. */
-function asList(value: unknown): string[] {
-  const items = Array.isArray(value)
-    ? value.filter((v): v is string => typeof v === "string")
-    : typeof value === "string"
-      ? value.split(",")
-      : [];
-
-  return items.map((s) => s.trim()).filter((s) => s.length > 0 && s.length <= 120);
 }

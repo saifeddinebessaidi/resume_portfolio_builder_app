@@ -52,10 +52,12 @@ import { messages } from "@/messages/fr";
  *   which is how a field a user marked private reaches a public page.
  */
 
-/** One social channel that has a URL. */
+/** One social channel that has a URL, and the audience the talent reports on it. */
 interface Social {
   label: string;
   url: string;
+  /** Absent when the talent listed the channel without a figure — the row then shows the name alone. */
+  count?: number | undefined;
 }
 
 const PROFESSION_FR: Record<PortfolioPayload["profession"], string> = {
@@ -128,10 +130,11 @@ export function PublicPortfolio({
    * in position 1 — so the empties are dropped by returning `[]` instead, which narrows for free.
    */
   const socials: Social[] = [
-    { label: "Instagram", url: data.instagramUrl },
-    { label: "TikTok", url: data.tiktokUrl },
-    { label: "YouTube", url: data.youtubeUrl },
-  ].flatMap(({ label, url }) => (url?.trim() ? [{ label, url }] : []));
+    { label: "Instagram", url: data.instagramUrl, count: data.instagramFollowers },
+    { label: "Facebook", url: data.facebookUrl, count: data.facebookFollowers },
+    { label: "TikTok", url: data.tiktokUrl, count: data.tiktokFollowers },
+    { label: "YouTube", url: data.youtubeUrl, count: data.youtubeSubscribers },
+  ].flatMap(({ label, url, count }) => (url?.trim() ? [{ label, url, count }] : []));
 
   const hasProjects = featured.length > 0 || selected.length > 0;
 
@@ -244,7 +247,9 @@ export function PublicPortfolio({
                   Résumé ↗
                 </a>
               ) : null}
-              {socials.length > 0 ? <SocialRow socials={socials} className="mt-8" /> : null}
+              {socials.length > 0 ? (
+                <SocialRow socials={socials} className="mt-8" withCounts />
+              ) : null}
             </div>
           </Reveal>
 
@@ -424,7 +429,7 @@ export function PublicPortfolio({
           <div className="mx-auto max-w-5xl">
             <Reveal>
               <h2 className="mb-12 text-xs uppercase tracking-[0.3em] text-white/50">
-                Expériences &amp; collaborations
+                Prix &amp; distinctions
               </h2>
             </Reveal>
             <div className="border-t border-white/10">
@@ -597,59 +602,51 @@ export function PublicPortfolio({
  * ---------------------------------------------------------------------------------------------- */
 
 /**
- * The stat row: **one figure per network**, then reach and engagement.
+ * Total followers, reach, engagement — the original's three-up stat row, matched exactly.
  *
- * ## Why this stopped summing
+ * It **sums** the four follower counts under one "Abonnés" label. I briefly changed this to a figure per
+ * network, which was wrong twice over: it diverges from the reference, and it put the same numbers on the
+ * page twice, because the per-network counts belong in the À propos social list where the reference puts
+ * them. The named figure and the total are complementary, not alternatives.
  *
- * It used to add Instagram, TikTok and YouTube together under a single "Abonnés" label. That is what the
- * reference profile does *not* do — it names each network — and the difference matters to the person
- * being read. "418 abonnés" says nothing about where, and a brand evaluating a creator is deciding
- * whether the audience is on the platform they are buying. A named 418 on Instagram is a fact they can
- * act on; an anonymous 418 is a number they have to ask about.
+ * Worth distinguishing the sum from the AI prompt, which forbids exactly this: here the arithmetic is a
+ * labelled UI aggregate whose parts are listed a section above, not a sentence asserting a figure as fact.
  *
- * It also removed the one place in the product where a figure was presented without its source, which is
- * the exact thing the generator's prompt forbids for the written copy.
- *
- * ## Only what exists
- *
- * A network with no count is dropped rather than shown as zero — "0 abonnés TikTok" on a portfolio is
- * worse than silence, and someone who does not use TikTok has not failed to fill in a field. The grid
- * sizes itself to what survives, so one network renders one wide column rather than one number and two
- * gaps.
+ * **`engagement` is a percentage**, not a count — it renders as `12%`, never `12` run through
+ * `formatCount`, which at four figures would turn a rate into "1.2K".
  */
 function Metrics({ data }: { data: PortfolioPayload }): ReactNode {
-  const stats: [string, number][] = (
-    [
-      ["Instagram", data.instagramFollowers],
-      ["TikTok", data.tiktokFollowers],
-      ["YouTube", data.youtubeSubscribers],
-      ["Reach", data.reach],
-      ["Engagement", data.engagement],
-    ] as const
-  ).flatMap(([label, value]) => (value ? [[label, value] as [string, number]] : []));
+  const followers =
+    (data.instagramFollowers ?? 0) +
+    (data.facebookFollowers ?? 0) +
+    (data.tiktokFollowers ?? 0) +
+    (data.youtubeSubscribers ?? 0);
 
-  if (stats.length === 0) return null;
+  const stats: { label: string; value: number; display: string }[] = [
+    { label: "Abonnés", value: followers, display: formatCount(followers) },
+    { label: "Reach", value: data.reach ?? 0, display: formatCount(data.reach ?? 0) },
+    {
+      label: "Engagement",
+      value: data.engagement ?? 0,
+      display: `${String(data.engagement ?? 0)}%`,
+    },
+  ];
+
+  if (stats.every((s) => !s.value)) return null;
 
   return (
     <section
       id="stats"
       className="scroll-mt-20 border-t border-white/10 px-5 py-20 sm:px-8 sm:py-28"
     >
-      <div
-        className="mx-auto grid max-w-5xl gap-8 sm:gap-10"
-        // Inline rather than a Tailwind class: the column count is data-dependent, and Tailwind only
-        // emits classes it can see in the source — `grid-cols-${n}` would compile to nothing.
-        style={{
-          gridTemplateColumns: `repeat(${String(Math.min(stats.length, 3))}, minmax(0, 1fr))`,
-        }}
-      >
-        {stats.map(([label, value], i) => (
-          <Reveal key={label} delay={i * 0.1} className="text-center">
+      <div className="mx-auto grid max-w-5xl grid-cols-3 gap-4 sm:gap-10">
+        {stats.map((stat, i) => (
+          <Reveal key={stat.label} delay={i * 0.1} className="text-center">
             <p className="font-serif text-4xl font-semibold tabular-nums sm:text-6xl">
-              {formatCount(value)}
+              {stat.display}
             </p>
             <p className="mt-2 text-[10px] uppercase tracking-[0.3em] text-white/50 sm:text-xs">
-              {label}
+              {stat.label}
             </p>
           </Reveal>
         ))}
@@ -734,13 +731,22 @@ function VideoFigure({ video }: { video: PortfolioVideo }): ReactNode {
 function SocialRow({
   socials,
   className = "",
+  withCounts = false,
 }: {
   socials: Social[];
   className?: string;
+  /**
+   * Render each channel as a labelled row with its audience — the reference's À propos layout.
+   *
+   * Off in the footer, which wants the compact glyph strip. This is the only place the per-network
+   * figures appear: the stat row above sums them into one "Abonnés" total, so printing both there would
+   * state the same numbers twice.
+   */
+  withCounts?: boolean;
 }): ReactNode {
   return (
-    <div className={`flex gap-3 ${className}`}>
-      {socials.map(({ label, url }) => (
+    <div className={`flex ${withCounts ? "flex-col gap-3" : "gap-3"} ${className}`}>
+      {socials.map(({ label, url, count }) => (
         <a
           key={label}
           href={url}
@@ -752,9 +758,36 @@ function SocialRow({
           rel="noopener noreferrer nofollow"
           aria-label={label}
           title={label}
-          className="flex h-10 w-10 items-center justify-center rounded-full border border-white/25 text-white/80 transition-colors hover:border-white hover:bg-white hover:text-black"
+          className={
+            withCounts
+              ? "group flex items-center gap-3 text-white/80 transition-colors hover:text-white"
+              : "flex h-10 w-10 items-center justify-center rounded-full border border-white/25 text-white/80 transition-colors hover:border-white hover:bg-white hover:text-black"
+          }
         >
-          <SocialIcon name={label} />
+          <span
+            className={
+              withCounts
+                ? "flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/25"
+                : "contents"
+            }
+          >
+            <SocialIcon name={label} />
+          </span>
+
+          {withCounts ? (
+            <span className="text-sm tabular-nums">
+              {/* A channel listed without a figure shows its name alone — "0 Instagram" would be a
+                  claim the talent never made, and worse than saying nothing. */}
+              {count === undefined ? (
+                label
+              ) : (
+                <>
+                  <span className="font-medium">{formatCount(count)}</span>
+                  <span className="ml-1.5 text-white/50">{label}</span>
+                </>
+              )}
+            </span>
+          ) : null}
         </a>
       ))}
     </div>
@@ -771,6 +804,8 @@ function SocialIcon({ name }: { name: string }): ReactNode {
   const paths: Record<string, string> = {
     Instagram:
       "M12 2.16c3.2 0 3.58.01 4.85.07 1.17.05 1.8.25 2.23.41.56.22.96.48 1.38.9.42.42.68.82.9 1.38.16.42.36 1.06.41 2.23.06 1.27.07 1.65.07 4.85s-.01 3.58-.07 4.85c-.05 1.17-.25 1.8-.41 2.23-.22.56-.48.96-.9 1.38-.42.42-.82.68-1.38.9-.42.16-1.06.36-2.23.41-1.27.06-1.65.07-4.85.07s-3.58-.01-4.85-.07c-1.17-.05-1.8-.25-2.23-.41a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.16-.42-.36-1.06-.41-2.23C2.17 15.58 2.16 15.2 2.16 12s.01-3.58.07-4.85c.05-1.17.25-1.8.41-2.23.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.42-.16 1.06-.36 2.23-.41C8.42 2.17 8.8 2.16 12 2.16Zm0 1.62c-3.15 0-3.5.01-4.74.07-.96.04-1.48.2-1.83.34-.46.18-.79.39-1.13.74-.34.34-.56.67-.74 1.13-.14.35-.3.87-.34 1.83-.06 1.24-.07 1.59-.07 4.74s.01 3.5.07 4.74c.04.96.2 1.48.34 1.83.18.46.39.79.74 1.13.34.34.67.56 1.13.74.35.14.87.3 1.83.34 1.24.06 1.59.07 4.74.07s3.5-.01 4.74-.07c.96-.04 1.48-.2 1.83-.34.46-.18.79-.39 1.13-.74.34-.34.56-.67.74-1.13.14-.35.3-.87.34-1.83.06-1.24.07-1.59.07-4.74s-.01-3.5-.07-4.74c-.04-.96-.2-1.48-.34-1.83a3.04 3.04 0 0 0-.74-1.13 3.04 3.04 0 0 0-1.13-.74c-.35-.14-.87-.3-1.83-.34-1.24-.06-1.59-.07-4.74-.07Zm0 2.76a5.46 5.46 0 1 1 0 10.92 5.46 5.46 0 0 1 0-10.92Zm0 1.62a3.84 3.84 0 1 0 0 7.68 3.84 3.84 0 0 0 0-7.68Zm5.65-2.9a1.28 1.28 0 1 1 0 2.56 1.28 1.28 0 0 1 0-2.56Z",
+    Facebook:
+      "M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.78-1.63 1.57v1.89h2.78l-.45 2.91h-2.33V22c4.78-.76 8.44-4.92 8.44-9.94Z",
     TikTok:
       "M16.6 5.82a4.5 4.5 0 0 1-1.07-2.98h-3.4v12.27a2.6 2.6 0 1 1-2.6-2.6c.27 0 .53.04.78.12v-3.46a6 6 0 1 0 5.2 5.94V9.4a7.7 7.7 0 0 0 4.5 1.45V7.4a4.5 4.5 0 0 1-3.41-1.58Z",
     YouTube:

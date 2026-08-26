@@ -185,6 +185,7 @@ function buildFactSheet(data: PortfolioPayload): string {
     data.instagramUrl?.trim()
       ? `Instagram (${String(data.instagramFollowers ?? "?")} abonnés)`
       : null,
+    data.facebookUrl?.trim() ? `Facebook (${String(data.facebookFollowers ?? "?")} abonnés)` : null,
     data.tiktokUrl?.trim() ? `TikTok (${String(data.tiktokFollowers ?? "?")} abonnés)` : null,
     data.youtubeUrl?.trim() ? `YouTube (${String(data.youtubeSubscribers ?? "?")} abonnés)` : null,
   ].filter((v): v is string => v !== null);

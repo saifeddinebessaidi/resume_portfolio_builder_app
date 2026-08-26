@@ -69,6 +69,7 @@ const PROFESSION_FR: Record<PortfolioPayload["profession"], string> = {
 };
 
 const CATEGORY_FR: Record<string, string> = {
+  story: "Story",
   reels: "Reels",
   live: "Live",
   events: "Événements",
@@ -596,30 +597,52 @@ export function PublicPortfolio({
  * ---------------------------------------------------------------------------------------------- */
 
 /**
- * Total followers, reach, engagement — the original's three-up stat row.
+ * The stat row: **one figure per network**, then reach and engagement.
  *
- * It **sums** the three follower counts under one "Abonnés" label, which is the design's own choice and
- * is kept. Worth distinguishing from the AI prompt, which forbids exactly this: here the arithmetic is a
- * labelled UI aggregate a reader can see the parts of, not a sentence asserting a figure as fact.
+ * ## Why this stopped summing
+ *
+ * It used to add Instagram, TikTok and YouTube together under a single "Abonnés" label. That is what the
+ * reference profile does *not* do — it names each network — and the difference matters to the person
+ * being read. "418 abonnés" says nothing about where, and a brand evaluating a creator is deciding
+ * whether the audience is on the platform they are buying. A named 418 on Instagram is a fact they can
+ * act on; an anonymous 418 is a number they have to ask about.
+ *
+ * It also removed the one place in the product where a figure was presented without its source, which is
+ * the exact thing the generator's prompt forbids for the written copy.
+ *
+ * ## Only what exists
+ *
+ * A network with no count is dropped rather than shown as zero — "0 abonnés TikTok" on a portfolio is
+ * worse than silence, and someone who does not use TikTok has not failed to fill in a field. The grid
+ * sizes itself to what survives, so one network renders one wide column rather than one number and two
+ * gaps.
  */
 function Metrics({ data }: { data: PortfolioPayload }): ReactNode {
-  const followers =
-    (data.instagramFollowers ?? 0) + (data.tiktokFollowers ?? 0) + (data.youtubeSubscribers ?? 0);
+  const stats: [string, number][] = (
+    [
+      ["Instagram", data.instagramFollowers],
+      ["TikTok", data.tiktokFollowers],
+      ["YouTube", data.youtubeSubscribers],
+      ["Reach", data.reach],
+      ["Engagement", data.engagement],
+    ] as const
+  ).flatMap(([label, value]) => (value ? [[label, value] as [string, number]] : []));
 
-  const stats: [string, number][] = [
-    ["Abonnés", followers],
-    ["Reach", data.reach ?? 0],
-    ["Engagement", data.engagement ?? 0],
-  ];
-
-  if (stats.every(([, value]) => !value)) return null;
+  if (stats.length === 0) return null;
 
   return (
     <section
       id="stats"
       className="scroll-mt-20 border-t border-white/10 px-5 py-20 sm:px-8 sm:py-28"
     >
-      <div className="mx-auto grid max-w-5xl grid-cols-3 gap-4 sm:gap-10">
+      <div
+        className="mx-auto grid max-w-5xl gap-8 sm:gap-10"
+        // Inline rather than a Tailwind class: the column count is data-dependent, and Tailwind only
+        // emits classes it can see in the source — `grid-cols-${n}` would compile to nothing.
+        style={{
+          gridTemplateColumns: `repeat(${String(Math.min(stats.length, 3))}, minmax(0, 1fr))`,
+        }}
+      >
         {stats.map(([label, value], i) => (
           <Reveal key={label} delay={i * 0.1} className="text-center">
             <p className="font-serif text-4xl font-semibold tabular-nums sm:text-6xl">

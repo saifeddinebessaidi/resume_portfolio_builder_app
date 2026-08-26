@@ -238,6 +238,8 @@ export const messages = {
     pricingCategory: "Catégorie (reels, live, événements…)",
     /** The reference's four presets. `category` stays free text in the payload — a creator names their own. */
     pricingCategories: {
+      /** The reference's cheapest prestation, and usually the first line of a rate card. */
+      story: "Story",
       reels: "Reels",
       live: "Live",
       events: "Événements",

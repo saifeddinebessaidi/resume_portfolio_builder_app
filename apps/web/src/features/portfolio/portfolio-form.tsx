@@ -218,6 +218,9 @@ export function PortfolioForm({
         {(
           [
             ["Instagram", "instagramUrl", "instagramFollowers"],
+            // Facebook sat in the reference's payload, its audience total and its profile list, and was
+            // missing here — so a creator whose audience is mostly on Facebook could not say so.
+            ["Facebook", "facebookUrl", "facebookFollowers"],
             ["TikTok", "tiktokUrl", "tiktokFollowers"],
             ["YouTube", "youtubeUrl", "youtubeSubscribers"],
           ] as const

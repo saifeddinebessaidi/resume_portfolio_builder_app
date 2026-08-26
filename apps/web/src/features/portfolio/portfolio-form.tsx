@@ -173,6 +173,33 @@ export function PortfolioForm({
           </Row>
         </div>
 
+        {/**
+         * **The publish switch for the phone number.**
+         *
+         * `showPhone` was in the payload and honoured by the public page from the start, but no control
+         * ever set it — so it sat at its `false` default forever and the number could not be shown by
+         * any means. Storing a field, reading it, and giving nobody a way to change it is worse than not
+         * having it: the renderer looks broken and the data looks ignored.
+         *
+         * It was left out originally because the reference's own form does not collect it. That was the
+         * wrong call for this field specifically: the reference *does* read it, and a number a user
+         * typed into a portfolio form is one they expect to appear on the portfolio.
+         *
+         * Default stays `false`. Opt-in is the only defensible default for publishing a personal phone
+         * number to a page anyone with the link can read.
+         */}
+        {value.phone?.trim() ? (
+          <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              checked={value.showPhone}
+              onChange={(e) => set("showPhone", e.target.checked)}
+              className="size-4 accent-[var(--primary)]"
+            />
+            <span className="text-muted-foreground">{messages.portfolio.showPhone}</span>
+          </label>
+        ) : null}
+
         <Row label={messages.portfolio.tagline}>
           <Input
             value={value.tagline ?? ""}
@@ -327,6 +354,17 @@ export function PortfolioForm({
               value={p.category}
               onChange={(e) => update("pricing", i, { category: e.target.value })}
             >
+              {/**
+               * Story first, then reel, live, event — the reference profile's own order and its full
+               * set. `story` was missing entirely, which is the cheapest prestation an influencer sells
+               * and usually the first line of their rate card.
+               *
+               * The existing `reels` / `events` values are kept rather than renamed to the reference's
+               * singular: `category` is free text in stored payloads, and renaming the value would leave
+               * every saved rate card pointing at an option that no longer exists — the `<select>` would
+               * silently show the first entry instead, quietly rewriting someone's prices on next save.
+               */}
+              <option value="story">{messages.portfolio.pricingCategories.story}</option>
               <option value="reels">{messages.portfolio.pricingCategories.reels}</option>
               <option value="live">{messages.portfolio.pricingCategories.live}</option>
               <option value="events">{messages.portfolio.pricingCategories.events}</option>

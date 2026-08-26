@@ -168,9 +168,19 @@ export const portfolioPayloadSchema = z.object({
 
   // --- socials, and self-reported audience ---
   instagramUrl: z.string().max(500).optional(),
+  /**
+   * Facebook — present in the reference's payload and its renderer, and missing here until now.
+   *
+   * Its absence was not a design decision, it was an omission: the reference sums `facebookFollowers`
+   * into the audience total and lists the page alongside the others, so a creator whose audience is
+   * mostly on Facebook had no way to say so. Optional like the rest, and the payload is `Jsonb`, so
+   * existing rows parse unchanged with the field simply absent.
+   */
+  facebookUrl: z.string().max(500).optional(),
   tiktokUrl: z.string().max(500).optional(),
   youtubeUrl: z.string().max(500).optional(),
   instagramFollowers: z.number().int().min(0).optional(),
+  facebookFollowers: z.number().int().min(0).optional(),
   tiktokFollowers: z.number().int().min(0).optional(),
   youtubeSubscribers: z.number().int().min(0).optional(),
   reach: z.number().int().min(0).optional(),
@@ -243,7 +253,11 @@ export function portfolioGenerationReadiness(data: PortfolioPayload): PortfolioG
     description: filled(data.description),
     experiences: data.experiences.some((e) => filled(e.title)),
     skills: data.skills.some((s) => filled(s)),
-    socials: filled(data.instagramUrl) || filled(data.tiktokUrl) || filled(data.youtubeUrl),
+    socials:
+      filled(data.instagramUrl) ||
+      filled(data.facebookUrl) ||
+      filled(data.tiktokUrl) ||
+      filled(data.youtubeUrl),
   };
 
   const missing = PORTFOLIO_GENERATION_INPUT_KEYS.filter((k) => !present[k]);
@@ -269,7 +283,11 @@ export function portfolioCompletion(data: PortfolioPayload): PortfolioCompletion
     experiences: data.experiences.some((e) => filled(e.title)),
     skills: data.skills.some((s) => filled(s)),
     // Any one channel is enough — a model with only Instagram is not half a portfolio.
-    socials: filled(data.instagramUrl) || filled(data.tiktokUrl) || filled(data.youtubeUrl),
+    socials:
+      filled(data.instagramUrl) ||
+      filled(data.facebookUrl) ||
+      filled(data.tiktokUrl) ||
+      filled(data.youtubeUrl),
   };
 
   const steps = PORTFOLIO_COMPLETION_STEPS.map((s) => ({ ...s, done: done[s.key] }));

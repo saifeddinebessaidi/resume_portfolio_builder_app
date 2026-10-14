@@ -1,7 +1,16 @@
 "use client";
 
 import { CATEGORY_SLUGS } from "@repo/contracts";
-import { FileText, LayoutDashboard, Menu, Palette, Sparkles, UserRound, X } from "lucide-react";
+import {
+  FileText,
+  LayoutDashboard,
+  Menu,
+  Palette,
+  ShieldCheck,
+  Sparkles,
+  UserRound,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -33,7 +42,10 @@ const links = [
   { href: `/${CATEGORY_SLUGS.PORTFOLIO_PRO}`, label: messages.nav.portfolioPro, icon: Sparkles },
 ] as const;
 
-export function Navbar({ email }: { email: string }): ReactNode {
+const adminLink = { href: "/admin", label: messages.nav.admin, icon: ShieldCheck } as const;
+
+export function Navbar({ email, isAdmin }: { email: string; isAdmin: boolean }): ReactNode {
+  const items = isAdmin ? [...links, adminLink] : links;
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,7 +72,7 @@ export function Navbar({ email }: { email: string }): ReactNode {
         <Wordmark />
 
         <nav aria-label={messages.nav.home} className="hidden items-center gap-8 text-sm md:flex">
-          {links.map(({ href, label }) => (
+          {items.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -102,7 +114,7 @@ export function Navbar({ email }: { email: string }): ReactNode {
           className="flex flex-col gap-4 px-6 pb-6 text-sm md:hidden"
           style={{ background: "rgba(9,9,11,0.95)" }}
         >
-          {links.map(({ href, label, icon: Icon }) => (
+          {items.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}

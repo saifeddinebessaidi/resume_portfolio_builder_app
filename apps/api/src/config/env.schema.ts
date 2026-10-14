@@ -15,7 +15,7 @@ import { z } from "zod";
  * verifies Supabase's RS256 tokens against its JWKS and is the production setting.
  * See ADR-0001 and phase 2 step 06.
  */
-export const authProviders = ["local", "supabase"] as const;
+export const authProviders = ["local", "supabase", "password"] as const;
 
 const nonEmpty = z.string().trim().min(1);
 
@@ -129,6 +129,25 @@ const baseEnvSchema = z.object({
   /** Only read when AUTH_PROVIDER=local. Signs the development-only bearer tokens. */
   LOCAL_AUTH_SECRET: z.string().min(32).optional(),
   LOCAL_AUTH_TOKEN_TTL: z.coerce.number().int().positive().default(86_400),
+  /**
+   * Comma-separated emails that `POST /dev-auth/token` may mint a token for when the account is an
+   * ADMIN. Empty = no admin tokens at all. Staging runs AUTH_PROVIDER=local with NODE_ENV unset, so
+   * without this anyone who can reach staging could sign in as an admin by typing their email.
+   */
+  DEV_AUTH_ADMIN_ALLOWLIST: z
+    .string()
+    .default("")
+    .transform((raw) =>
+      raw
+        .split(",")
+        .map((e) => e.trim().toLowerCase())
+        .filter((e) => e.length > 0),
+    ),
+
+  /** Only read when AUTH_PROVIDER=password. Signs the session tokens this API issues itself. */
+  AUTH_JWT_SECRET: z.string().min(32).optional(),
+  /** Session length for AUTH_PROVIDER=password. Default 7 days. */
+  AUTH_TOKEN_TTL: z.coerce.number().int().positive().default(604_800),
 
   /** Only read when AUTH_PROVIDER=supabase. Deliberately no service-role key — ADR-0001. */
   SUPABASE_URL: z.url().optional(),
@@ -148,6 +167,15 @@ export const envSchema = baseEnvSchema
         code: "custom",
         path: ["SUPABASE_URL"],
         message: "SUPABASE_URL is required when AUTH_PROVIDER=supabase (used for JWKS discovery).",
+      });
+    }
+
+    if (env.AUTH_PROVIDER === "password" && !env.AUTH_JWT_SECRET) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["AUTH_JWT_SECRET"],
+        message:
+          "AUTH_JWT_SECRET (32+ characters) is required when AUTH_PROVIDER=password. Generate one with: openssl rand -base64 48",
       });
     }
 

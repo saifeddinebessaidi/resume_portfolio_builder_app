@@ -11,6 +11,7 @@ import {
   type CatalogRepository,
 } from "../../catalog/domain/catalog.repository";
 import { CLOCK, type Clock } from "../../../common/clock/clock";
+import { FeatureAccessService } from "../../subscriptions/application/feature-access.service";
 import { ConsumeEntitlementService } from "../../subscriptions/application/consume-entitlement.service";
 import {
   EntitlementExhaustedError,
@@ -51,6 +52,7 @@ export class CreateProjectUseCase {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(PROJECT_COUNTER) private readonly projectCounter: ProjectCounter,
     private readonly consume: ConsumeEntitlementService,
+    private readonly featureAccess: FeatureAccessService,
   ) {}
 
   async execute(command: CreateProjectCommand): Promise<Project> {
@@ -58,6 +60,9 @@ export class CreateProjectUseCase {
 
     const category = await this.catalog.findCategoryByCode(command.categoryCode);
     if (!category?.isActive) throw new NotFoundError("Cette catégorie est introuvable.");
+
+    // An admin block on the section. Before `uow.run`: it reads on the base client.
+    await this.featureAccess.assertCategoryEnabled(command.actorUserId, category.code);
 
     /**
      * **Creating is free. Downloading is what you pay for.**

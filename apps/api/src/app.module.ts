@@ -1,6 +1,7 @@
 import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 
+import { AdminModule } from "./modules/admin/presentation/admin.module";
 import { AppConfigModule } from "./config/config.module";
 import { AuthGuard } from "./common/guards/auth.guard";
 import { AuthModule } from "./infrastructure/auth/auth.module";
@@ -8,6 +9,7 @@ import { BillingModule } from "./modules/billing/presentation/billing.module";
 import { CatalogModule } from "./modules/catalog/presentation/catalog.module";
 import { ClockModule } from "./common/clock/clock.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
+import { AuthAccountsModule } from "./modules/auth/presentation/auth-accounts.module";
 import { DevAuthModule } from "./modules/dev-auth/dev-auth.module";
 import { GenerationModule } from "./modules/generation/presentation/generation.module";
 import { HealthModule } from "./modules/health/health.module";
@@ -42,6 +44,7 @@ import { loadEnv } from "./config/env.schema";
     SubscriptionsModule,
     ProjectsModule,
     BillingModule,
+    AdminModule,
     UploadsModule,
     GenerationModule,
     DashboardModule,
@@ -50,6 +53,7 @@ import { loadEnv } from "./config/env.schema";
     // Mounts POST /dev-auth/token only when AUTH_PROVIDER=local. In any other mode the module has
     // no controller, so the route does not exist rather than being disabled.
     DevAuthModule.forProvider(loadEnv().AUTH_PROVIDER),
+    AuthAccountsModule.forProvider(loadEnv().AUTH_PROVIDER),
   ],
   providers: [
     /**

@@ -23,7 +23,7 @@ export function SignOutButton(): ReactNode {
       disabled={pending}
       onClick={() => {
         setPending(true);
-        void fetch("/dev-signin", { method: "DELETE" }).then(() => {
+        void fetch("/session", { method: "DELETE" }).then(() => {
           router.replace("/signin");
           router.refresh();
         });

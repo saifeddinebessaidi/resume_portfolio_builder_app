@@ -2,6 +2,7 @@ import { Global, Logger, Module } from "@nestjs/common";
 
 import { AppConfigService } from "../../config/app-config.service";
 import { LocalJwtVerifier } from "./local-jwt.verifier";
+import { PasswordJwtVerifier } from "./password-jwt.verifier";
 import { SupabaseJwtVerifier } from "./supabase-jwt.verifier";
 import { TOKEN_VERIFIER, type TokenVerifier } from "./token-verifier";
 import { UsersModule } from "../../modules/users/presentation/users.module";
@@ -21,11 +22,31 @@ import { UsersModule } from "../../modules/users/presentation/users.module";
 @Module({
   imports: [UsersModule],
   providers: [
-    LocalJwtVerifier,
+    /**
+     * Each self-issuing verifier is built only in its own mode: both read a secret that is absent in
+     * the other modes, and constructing them eagerly would fail the boot. In the other modes the
+     * provider resolves to null, and nothing that injects it is mounted.
+     */
+    {
+      provide: LocalJwtVerifier,
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService): LocalJwtVerifier | null =>
+        config.authProvider === "local" ? new LocalJwtVerifier(config) : null,
+    },
+    {
+      provide: PasswordJwtVerifier,
+      inject: [AppConfigService],
+      useFactory: (config: AppConfigService): PasswordJwtVerifier | null =>
+        config.authProvider === "password" ? new PasswordJwtVerifier(config) : null,
+    },
     {
       provide: TOKEN_VERIFIER,
-      inject: [AppConfigService, LocalJwtVerifier],
-      useFactory: (config: AppConfigService, local: LocalJwtVerifier): TokenVerifier => {
+      inject: [AppConfigService, LocalJwtVerifier, PasswordJwtVerifier],
+      useFactory: (
+        config: AppConfigService,
+        local: LocalJwtVerifier | null,
+        password: PasswordJwtVerifier | null,
+      ): TokenVerifier => {
         const logger = new Logger("AuthModule");
 
         if (config.authProvider === "supabase") {
@@ -33,13 +54,19 @@ import { UsersModule } from "../../modules/users/presentation/users.module";
           return new SupabaseJwtVerifier(config);
         }
 
+        if (config.authProvider === "password" && password) {
+          logger.log("Auth provider: password (HS256, issued by this API)");
+          return password;
+        }
+
         // env.schema.ts refuses to boot with this provider in production, so reaching here in a
         // deployed environment is impossible rather than merely discouraged.
         logger.warn("Auth provider: local (development only)");
+        if (!local) throw new Error("LocalJwtVerifier missing for AUTH_PROVIDER=local");
         return local;
       },
     },
   ],
-  exports: [TOKEN_VERIFIER, LocalJwtVerifier],
+  exports: [TOKEN_VERIFIER, LocalJwtVerifier, PasswordJwtVerifier],
 })
 export class AuthModule {}

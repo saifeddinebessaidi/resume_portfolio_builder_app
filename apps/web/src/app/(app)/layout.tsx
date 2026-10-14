@@ -22,9 +22,12 @@ export default async function AppLayout({ children }: { children: ReactNode }): 
   if (!token) redirect("/signin");
 
   let email: string;
+  let isAdmin: boolean;
   try {
     const me = await meApi.get();
     email = me.email;
+    // Shows the admin link only. The API re-checks the role on every /admin call.
+    isAdmin = me.role === "ADMIN";
   } catch (error) {
     if (isUnauthenticated(error)) redirect("/signin");
     // Anything else — the API is down, the database is unreachable — is not an auth problem, and
@@ -37,7 +40,7 @@ export default async function AppLayout({ children }: { children: ReactNode }): 
     // The landing page's aurora radials plus its film grain, so the dashboard sits on the same
     // surface as the marketing site rather than on a flat panel.
     <div className="rc-aurora rc-noise min-h-screen">
-      <Navbar email={email} />
+      <Navbar email={email} isAdmin={isAdmin} />
       <main className="relative z-10 mx-auto max-w-7xl px-6 py-10 md:px-10">{children}</main>
     </div>
   );

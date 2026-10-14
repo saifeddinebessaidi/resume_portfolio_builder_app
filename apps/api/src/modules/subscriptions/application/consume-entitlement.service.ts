@@ -5,8 +5,13 @@ import {
   CATALOG_REPOSITORY,
   type CatalogRepository,
 } from "../../catalog/domain/catalog.repository";
+import {
+  ACCESS_OVERRIDES,
+  type AccessOverrideReader,
+  applyLimitOverrides,
+} from "../domain/access-override";
 import { EntitlementExhaustedError } from "../../../common/errors/errors";
-import { entitlementFor, type PlanEntitlement } from "../../catalog/domain/catalog.entity";
+import { type PlanEntitlement } from "../../catalog/domain/catalog.entity";
 import { periodWindowFor } from "../domain/period";
 import { type Subscription } from "../domain/subscription.entity";
 import {
@@ -38,6 +43,7 @@ export class ConsumeEntitlementService {
   constructor(
     @Inject(USAGE_COUNTER_REPOSITORY) private readonly counters: UsageCounterRepository,
     @Inject(CATALOG_REPOSITORY) private readonly catalog: CatalogRepository,
+    @Inject(ACCESS_OVERRIDES) private readonly overrides: AccessOverrideReader,
   ) {}
 
   /**
@@ -137,16 +143,20 @@ export class ConsumeEntitlementService {
    * note in `consume`.
    *
    * Returns `undefined` when the plan does not declare the key (deny by default) or when the plan row
-   * has vanished.
+   * has vanished. An admin's per-user override for the key replaces the plan's limit, or adds the key
+   * if the plan never declared it.
    */
   async resolve(
     subscription: Subscription,
     key: EntitlementKey,
   ): Promise<PlanEntitlement | undefined> {
-    const plan = await this.catalog.findPlanByCode(subscription.planCodeSnapshot);
+    const [plan, overrides] = await Promise.all([
+      this.catalog.findPlanByCode(subscription.planCodeSnapshot),
+      this.overrides.limitOverridesFor(subscription.userId, subscription.categoryId),
+    ]);
     if (!plan) return undefined;
 
-    return entitlementFor(plan, key);
+    return applyLimitOverrides(plan.entitlements, overrides).find((e) => e.key === key);
   }
 
   /**

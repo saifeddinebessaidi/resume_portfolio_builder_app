@@ -2,6 +2,7 @@ import { Inject, Injectable } from "@nestjs/common";
 import { EntitlementKey, type ExportFormat } from "@repo/contracts";
 
 import { CLOCK, type Clock } from "../../../common/clock/clock";
+import { FeatureAccessService } from "../../subscriptions/application/feature-access.service";
 import { ConsumeEntitlementService } from "../../subscriptions/application/consume-entitlement.service";
 import {
   ExportLimitReachedError,
@@ -50,6 +51,7 @@ export class ExportProjectUseCase {
     @Inject(TRANSACTION_RUNNER) private readonly uow: TransactionRunner,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly consume: ConsumeEntitlementService,
+    private readonly featureAccess: FeatureAccessService,
   ) {}
 
   async execute(command: ExportCommand): Promise<ExportResult> {
@@ -57,6 +59,12 @@ export class ExportProjectUseCase {
 
     const project = await this.projects.findByIdForOwner(command.projectId, command.actorUserId);
     if (!project) throw new NotFoundError("Ce projet est introuvable.");
+
+    await this.featureAccess.assertCategoryEnabled(
+      command.actorUserId,
+      project.categoryCode,
+      "EXPORT",
+    );
 
     const subscription = await this.subs.findActiveFor(
       command.actorUserId,

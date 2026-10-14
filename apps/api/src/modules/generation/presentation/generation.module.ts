@@ -5,6 +5,7 @@ import { GeneratePortfolioContentUseCase } from "../application/generate-portfol
 import { GenerateResumeSummaryUseCase } from "../application/generate-resume-summary.use-case";
 import { OpenAiCompatibleGenerator } from "../infrastructure/openai-compatible.generator";
 import { ProjectsModule } from "../../projects/presentation/projects.module";
+import { SubscriptionsModule } from "../../subscriptions/presentation/subscriptions.module";
 import { TEXT_GENERATOR } from "../domain/text-generator.port";
 
 /**
@@ -21,7 +22,8 @@ import { TEXT_GENERATOR } from "../domain/text-generator.port";
  * the entire point of the port.
  */
 @Module({
-  imports: [ProjectsModule],
+  // SubscriptionsModule for FeatureAccessService: an admin can switch AI generation off per user.
+  imports: [ProjectsModule, SubscriptionsModule],
   controllers: [GenerationController],
   providers: [
     GeneratePortfolioContentUseCase,

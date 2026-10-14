@@ -1,4 +1,5 @@
 import {
+  type AccessFeature,
   type CategoryCode,
   type EntitlementKey,
   type ErrorCode,
@@ -239,6 +240,50 @@ export class IdempotencyConflictError extends DomainError {
 
   constructor(key: string) {
     super("Cette clé d'idempotence a déjà été utilisée avec une requête différente.", { key });
+  }
+}
+
+// --- Password authentication --------------------------------------------------------
+
+/** Same error for unknown email and wrong password, so sign-in cannot be used to probe accounts. */
+export class InvalidCredentialsError extends DomainError {
+  readonly code: ErrorCode = "INVALID_CREDENTIALS";
+
+  constructor() {
+    super("Adresse e-mail ou mot de passe incorrect.");
+  }
+}
+
+export class EmailTakenError extends DomainError {
+  readonly code: ErrorCode = "EMAIL_TAKEN";
+
+  constructor() {
+    super("Un compte existe déjà avec cette adresse. Connectez-vous.");
+  }
+}
+
+// --- Admin --------------------------------------------------------------------------
+
+/**
+ * An admin switched this feature off for this user. Deliberately not in ENTITLEMENT_ERROR_CODES:
+ * buying a plan would not lift it, so the UI must not show an upgrade card.
+ */
+export class FeatureDisabledError extends DomainError {
+  readonly code: ErrorCode = "FEATURE_DISABLED";
+
+  constructor(feature: AccessFeature) {
+    super("Cette fonctionnalité a été désactivée pour votre compte. Contactez le support.", {
+      feature,
+    });
+  }
+}
+
+/** Demoting or suspending the only remaining active admin would lock everyone out of the panel. */
+export class LastAdminError extends DomainError {
+  readonly code: ErrorCode = "LAST_ADMIN";
+
+  constructor() {
+    super("Impossible : ce compte est le dernier administrateur actif.");
   }
 }
 

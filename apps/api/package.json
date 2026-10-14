@@ -15,7 +15,8 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
-    "verify:invoice-numbers": "node -r ts-node/register scripts/verify-invoice-numbers.ts"
+    "verify:invoice-numbers": "node -r ts-node/register scripts/verify-invoice-numbers.ts",
+    "set-password": "node -r ts-node/register scripts/set-password.ts"
   },
   "prisma": {
     "seed": "node -r ts-node/register prisma/seed.ts"

@@ -21,6 +21,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, ErrorDefinition> = {
   VALIDATION_FAILED: { httpStatus: 422, title: "Données invalides" },
   UNAUTHENTICATED: { httpStatus: 401, title: "Authentification requise" },
   TOKEN_INVALID: { httpStatus: 401, title: "Session invalide" },
+  INVALID_CREDENTIALS: { httpStatus: 401, title: "Identifiants incorrects" },
   ACCOUNT_SUSPENDED: { httpStatus: 403, title: "Compte suspendu" },
   FORBIDDEN: { httpStatus: 403, title: "Accès refusé" },
   NOT_FOUND: { httpStatus: 404, title: "Ressource introuvable" },
@@ -33,6 +34,7 @@ export const ERROR_CATALOGUE: Record<ErrorCode, ErrorDefinition> = {
   PUBLICATION_LIMIT_REACHED: { httpStatus: 403, title: "Limite de publications atteinte" },
   CUSTOM_SLUG_NOT_ALLOWED: { httpStatus: 403, title: "Lien personnalisé non inclus" },
   STORAGE_LIMIT_REACHED: { httpStatus: 403, title: "Espace de stockage épuisé" },
+  FEATURE_DISABLED: { httpStatus: 403, title: "Fonctionnalité désactivée" },
 
   SLUG_TAKEN: { httpStatus: 409, title: "Lien déjà utilisé" },
   VERSION_CONFLICT: { httpStatus: 409, title: "Conflit de version" },
@@ -40,6 +42,8 @@ export const ERROR_CATALOGUE: Record<ErrorCode, ErrorDefinition> = {
   ORDER_NOT_PAYABLE: { httpStatus: 409, title: "Commande non payable" },
   DUPLICATE_ACTIVE_SUBSCRIPTION: { httpStatus: 409, title: "Abonnement déjà actif" },
   IDEMPOTENCY_CONFLICT: { httpStatus: 409, title: "Requête déjà traitée différemment" },
+  LAST_ADMIN: { httpStatus: 409, title: "Dernier administrateur" },
+  EMAIL_TAKEN: { httpStatus: 409, title: "Adresse déjà utilisée" },
 
   RATE_LIMITED: { httpStatus: 429, title: "Trop de requêtes" },
   INTERNAL_ERROR: { httpStatus: 500, title: "Erreur interne" },

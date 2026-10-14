@@ -13,6 +13,7 @@ import {
   PROJECT_REPOSITORY,
   type ProjectRepository,
 } from "../../projects/domain/project.repository";
+import { FeatureAccessService } from "../../subscriptions/application/feature-access.service";
 import { TEXT_GENERATOR, type TextGenerator } from "../domain/text-generator.port";
 
 /**
@@ -49,6 +50,7 @@ export class GeneratePortfolioContentUseCase {
   constructor(
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(TEXT_GENERATOR) private readonly generator: TextGenerator,
+    private readonly featureAccess: FeatureAccessService,
   ) {}
 
   async execute(args: { projectId: string; userId: string }): Promise<GeneratedPortfolioContent> {
@@ -58,6 +60,12 @@ export class GeneratePortfolioContentUseCase {
      */
     const project = await this.projects.findByIdForOwner(args.projectId, args.userId);
     if (!project || project.deletedAt) throw new NotFoundError("Ce projet est introuvable.");
+
+    await this.featureAccess.assertCategoryEnabled(
+      args.userId,
+      project.categoryCode,
+      "AI_GENERATION",
+    );
 
     if (project.categoryCode !== "PORTFOLIO" && project.categoryCode !== "PORTFOLIO_PRO") {
       throw new ValidationFailedError([

@@ -127,6 +127,21 @@ export class AppConfigService {
     return secret;
   }
 
+  get authJwtSecret(): string {
+    const secret = this.get("AUTH_JWT_SECRET");
+    if (!secret)
+      throw new Error("AUTH_JWT_SECRET is not set; required when AUTH_PROVIDER=password.");
+    return secret;
+  }
+
+  get authTokenTtlSeconds(): number {
+    return this.get("AUTH_TOKEN_TTL");
+  }
+
+  get devAuthAdminAllowlist(): readonly string[] {
+    return this.get("DEV_AUTH_ADMIN_ALLOWLIST");
+  }
+
   get localAuthTokenTtlSeconds(): number {
     return this.get("LOCAL_AUTH_TOKEN_TTL");
   }

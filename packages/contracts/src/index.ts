@@ -44,3 +44,5 @@ export * from "./resources/order";
 export * from "./resources/dashboard";
 export * from "./resources/generation";
 export * from "./resources/payload";
+export * from "./resources/admin";
+export * from "./resources/auth";

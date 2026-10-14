@@ -3,6 +3,7 @@ import { EntitlementKey, isReservedSlug } from "@repo/contracts";
 import { randomBytes } from "node:crypto";
 
 import { CLOCK, type Clock } from "../../../common/clock/clock";
+import { FeatureAccessService } from "../../subscriptions/application/feature-access.service";
 import { ConsumeEntitlementService } from "../../subscriptions/application/consume-entitlement.service";
 import {
   CustomSlugNotAllowedError,
@@ -49,6 +50,7 @@ export class PublishProjectUseCase {
     @Inject(TRANSACTION_RUNNER) private readonly uow: TransactionRunner,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly consume: ConsumeEntitlementService,
+    private readonly featureAccess: FeatureAccessService,
   ) {}
 
   async execute(command: PublishCommand): Promise<Publication> {
@@ -56,6 +58,12 @@ export class PublishProjectUseCase {
 
     const project = await this.projects.findByIdForOwner(command.projectId, command.actorUserId);
     if (!project) throw new NotFoundError("Ce projet est introuvable.");
+
+    await this.featureAccess.assertCategoryEnabled(
+      command.actorUserId,
+      project.categoryCode,
+      "PUBLISH",
+    );
 
     const subscription = await this.subs.findActiveFor(
       command.actorUserId,

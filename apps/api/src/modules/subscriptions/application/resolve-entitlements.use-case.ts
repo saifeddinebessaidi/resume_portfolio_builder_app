@@ -6,6 +6,12 @@ import {
   type CatalogRepository,
 } from "../../catalog/domain/catalog.repository";
 import { CLOCK, type Clock } from "../../../common/clock/clock";
+import {
+  ACCESS_OVERRIDES,
+  type AccessOverrideReader,
+  applyLimitOverrides,
+  featureForCategory,
+} from "../domain/access-override";
 import { PROJECT_COUNTER, freeTierHasHeadroom, type ProjectCounter } from "../domain/free-tier";
 import { hasHeadroom, resolveEntitlement, type ResolvedEntitlement } from "../domain/entitlement";
 import { hasLapsed, type Subscription } from "../domain/subscription.entity";
@@ -18,7 +24,7 @@ import {
 } from "../domain/subscription.repository";
 
 export type BlockedReason =
-  "NO_ACTIVE_SUBSCRIPTION" | "ENTITLEMENT_EXHAUSTED" | "SUBSCRIPTION_EXPIRED";
+  "NO_ACTIVE_SUBSCRIPTION" | "ENTITLEMENT_EXHAUSTED" | "SUBSCRIPTION_EXPIRED" | "FEATURE_DISABLED";
 
 export interface CategoryEntitlementState {
   categoryCode: CategoryCode;
@@ -57,9 +63,27 @@ export class ResolveEntitlementsUseCase {
     @Inject(CATALOG_REPOSITORY) private readonly catalog: CatalogRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(PROJECT_COUNTER) private readonly projectCounter: ProjectCounter,
+    @Inject(ACCESS_OVERRIDES) private readonly overrides: AccessOverrideReader,
   ) {}
 
   async execute(userId: string, category: CategoryCode): Promise<CategoryEntitlementState> {
+    const [state, disabled] = await Promise.all([
+      this.resolveState(userId, category),
+      this.overrides.disabledFeatures(userId),
+    ]);
+
+    // An admin block wins over everything the plan says: the numbers stay visible, creation does not.
+    if (disabled.includes(featureForCategory(category))) {
+      return { ...state, canCreate: false, blockedReason: "FEATURE_DISABLED" };
+    }
+
+    return state;
+  }
+
+  private async resolveState(
+    userId: string,
+    category: CategoryCode,
+  ): Promise<CategoryEntitlementState> {
     const now = this.clock.now();
     const active = await this.subs.findActiveFor(userId, category, now);
 
@@ -137,7 +161,10 @@ export class ResolveEntitlementsUseCase {
     subscription: Subscription,
     now: Date,
   ): Promise<{ entitlements: ResolvedEntitlement[]; planName: string | null }> {
-    const plan = await this.catalog.findPlanByCode(subscription.planCodeSnapshot);
+    const [plan, overrides] = await Promise.all([
+      this.catalog.findPlanByCode(subscription.planCodeSnapshot),
+      this.overrides.limitOverridesFor(subscription.userId, subscription.categoryId),
+    ]);
 
     // The snapshot is the source of truth for *what was bought*; if the plan row has since been
     // deleted there is nothing to resolve against, and granting nothing is the safe answer.
@@ -145,7 +172,9 @@ export class ResolveEntitlementsUseCase {
 
     const usages = await this.counters.findForSubscription(subscription.id);
 
-    const entitlements = plan.entitlements.map((definition) => {
+    // Overrides are merged here exactly as ConsumeEntitlementService merges them, so the numbers the
+    // UI shows are the numbers enforcement uses.
+    const entitlements = applyLimitOverrides(plan.entitlements, overrides).map((definition) => {
       const window = periodWindowFor(definition.resetPeriod, subscription, now);
 
       // `NONE`: counted on the resource itself (Project.revisionCount, count(ProjectExport)), so

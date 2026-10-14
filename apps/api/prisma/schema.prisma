@@ -59,6 +59,16 @@ enum UserStatus {
   SUSPENDED
 }
 
+/// A section or action an admin can switch off for one user, on top of whatever their plan says.
+enum AccessFeature {
+  RESUME
+  PORTFOLIO
+  PORTFOLIO_PRO
+  AI_GENERATION
+  EXPORT
+  PUBLISH
+}
+
 enum SubscriptionStatus {
   PENDING
   ACTIVE
@@ -144,6 +154,9 @@ model User {
   externalAuthId String  @unique
   email          String  @unique
   fullName       String?
+  /// scrypt hash (`scrypt$N$r$p$salt$hash`) when AUTH_PROVIDER=password. Null for accounts that
+  /// only ever signed in through another provider. Never selected outside the auth module.
+  passwordHash String?
   /// Reserved for future i18n.
   locale         String  @default("fr")
 
@@ -165,6 +178,11 @@ model User {
   projectVersions ProjectVersion[]
   projectExports  ProjectExport[]
   idempotencyKeys IdempotencyKey[]
+
+  accessOverrides         UserAccessOverride[]      @relation("AccessOverrideUser")
+  accessOverridesSet      UserAccessOverride[]      @relation("AccessOverrideAdmin")
+  entitlementOverrides    UserEntitlementOverride[] @relation("EntitlementOverrideUser")
+  entitlementOverridesSet UserEntitlementOverride[] @relation("EntitlementOverrideAdmin")
 
   /// For signups-per-day analytics.
   @@index([createdAt])
@@ -205,6 +223,8 @@ model ProductCategory {
   orders          Order[]
   analyticsEvents AnalyticsEvent[]
   dailyMetrics    DailyMetric[]
+
+  entitlementOverrides UserEntitlementOverride[]
 
   @@index([isActive, sortOrder])
 }
@@ -791,4 +811,56 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
   @@index([action, createdAt])
+}
+
+// =============================================================================
+// ADMIN OVERRIDES
+//
+// Per-user exceptions an admin sets on top of the plan. Both tables are sparse: no row means
+// "the plan decides". Every write goes through an admin use case that also writes an AuditLog.
+// =============================================================================
+
+/// `enabled = false` blocks the feature for this user whatever their plan grants. A row with
+/// `enabled = true` is equivalent to no row; it exists so the admin UI can record a reason.
+model UserAccessOverride {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation("AccessOverrideUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  feature AccessFeature
+  enabled Boolean
+  reason  String?
+
+  updatedById String
+  updatedBy   User   @relation("AccessOverrideAdmin", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, feature])
+}
+
+/// Replaces the plan's `limitValue` for one key while the user holds an active subscription in
+/// the category. Same semantics as PlanEntitlement.limitValue: null = unlimited, 0 = denied.
+model UserEntitlementOverride {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation("EntitlementOverrideUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  categoryId String
+  category   ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  key        EntitlementKey
+  limitValue Int?
+  reason     String?
+
+  updatedById String
+  updatedBy   User   @relation("EntitlementOverrideAdmin", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, categoryId, key])
 }

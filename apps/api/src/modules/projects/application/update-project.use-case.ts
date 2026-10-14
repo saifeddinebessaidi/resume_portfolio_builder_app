@@ -6,6 +6,7 @@ import {
   ValidationFailedError,
   VersionConflictError,
 } from "../../../common/errors/errors";
+import { FeatureAccessService } from "../../subscriptions/application/feature-access.service";
 import { PROJECT_REPOSITORY, type ProjectRepository } from "../domain/project.repository";
 import {
   TRANSACTION_RUNNER,
@@ -27,12 +28,16 @@ export class UpdateProjectUseCase {
   constructor(
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(TRANSACTION_RUNNER) private readonly uow: TransactionRunner,
+    private readonly featureAccess: FeatureAccessService,
   ) {}
 
   async execute(command: UpdateProjectCommand): Promise<Project> {
     // Ownership is part of the lookup. Not-yours and not-found are the same 404.
     const project = await this.projects.findByIdForOwner(command.projectId, command.actorUserId);
     if (!project) throw new NotFoundError("Ce projet est introuvable.");
+
+    // A blocked section is read-only: the user keeps their data but cannot change it.
+    await this.featureAccess.assertCategoryEnabled(command.actorUserId, project.categoryCode);
 
     /**
      * Optimistic concurrency.

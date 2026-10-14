@@ -137,7 +137,7 @@ export async function CategoryScreen({ code }: { code: CategoryCode }): Promise<
 
         {!category.canCreate && category.blockedReason ? (
           <p className="text-xs text-muted-foreground">
-            {category.subscription
+            {category.subscription || category.blockedReason === "FEATURE_DISABLED"
               ? messages.blocked[category.blockedReason]
               : messages.blocked.freeTierUsed}
           </p>

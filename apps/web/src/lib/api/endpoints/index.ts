@@ -33,6 +33,18 @@ import {
   type GeneratedPortfolioContent,
   type GeneratedResumeSummary,
   type GeneratePortfolioContentRequest,
+  type AdminListOrdersQuery,
+  type AdminListOrdersResponse,
+  type AdminListUsersQuery,
+  type AdminListUsersResponse,
+  type AdminMetricsOverview,
+  type AdminPlansResponse,
+  type AdminUserDetail,
+  adminListOrdersResponseSchema,
+  adminListUsersResponseSchema,
+  adminMetricsOverviewSchema,
+  adminPlansResponseSchema,
+  adminUserDetailSchema,
 } from "@repo/contracts";
 
 import { request } from "../client";
@@ -216,4 +228,31 @@ export const projectsApi = {
     }),
 
   remove: (id: string) => request<void>({ path: ROUTES.projects.detail(id), method: "DELETE" }),
+};
+
+/**
+ * The back office's reads, called from server components. Mutations go through the
+ * `/api/admin/[...path]` proxy instead, because the browser cannot attach the httpOnly session.
+ */
+export const adminApi = {
+  users: (query: Partial<AdminListUsersQuery> = {}): Promise<AdminListUsersResponse> =>
+    request({
+      path: withQuery(ROUTES.admin.users(), query),
+      schema: adminListUsersResponseSchema,
+    }),
+
+  user: (id: string): Promise<AdminUserDetail> =>
+    request({ path: ROUTES.admin.user(id), schema: adminUserDetailSchema }),
+
+  orders: (query: Partial<AdminListOrdersQuery> = {}): Promise<AdminListOrdersResponse> =>
+    request({
+      path: withQuery(ROUTES.admin.orders(), query),
+      schema: adminListOrdersResponseSchema,
+    }),
+
+  plans: (): Promise<AdminPlansResponse> =>
+    request({ path: ROUTES.admin.plans(), schema: adminPlansResponseSchema }),
+
+  metrics: (): Promise<AdminMetricsOverview> =>
+    request({ path: ROUTES.admin.metricsOverview(), schema: adminMetricsOverviewSchema }),
 };

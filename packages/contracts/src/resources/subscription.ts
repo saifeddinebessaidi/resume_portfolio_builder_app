@@ -3,6 +3,7 @@ import { z } from "zod";
 import { categoryCodeSchema } from "../enums/category";
 import { entitlementKeySchema, resetPeriodSchema } from "../enums/entitlement";
 import { subscriptionSourceSchema, subscriptionStatusSchema } from "../enums/subscription";
+import { accessFeatureSchema } from "../enums/user";
 import { moneySchema } from "../primitives/money";
 
 /**
@@ -62,15 +63,26 @@ export const activeSubscriptionSummarySchema = z.object({
 
 export type ActiveSubscriptionSummary = z.infer<typeof activeSubscriptionSummarySchema>;
 
+/**
+ * Why `canCreate` is false. `FEATURE_DISABLED` means an admin switched the category off for this
+ * user — no plan purchase lifts it, so the UI must not show an upsell for it.
+ */
+export const blockedReasonSchema = z.enum([
+  "NO_ACTIVE_SUBSCRIPTION",
+  "ENTITLEMENT_EXHAUSTED",
+  "SUBSCRIPTION_EXPIRED",
+  "FEATURE_DISABLED",
+]);
+
+export type BlockedReason = z.infer<typeof blockedReasonSchema>;
+
 export const categoryEntitlementsSchema = z.object({
   categoryCode: categoryCodeSchema,
   subscription: activeSubscriptionSummarySchema.nullable(),
   entitlements: z.array(resolvedEntitlementSchema),
   /** Computed server-side. The client must never re-derive this from raw numbers. */
   canCreate: z.boolean(),
-  blockedReason: z
-    .enum(["NO_ACTIVE_SUBSCRIPTION", "ENTITLEMENT_EXHAUSTED", "SUBSCRIPTION_EXPIRED"])
-    .nullable(),
+  blockedReason: blockedReasonSchema.nullable(),
 });
 
 export type CategoryEntitlements = z.infer<typeof categoryEntitlementsSchema>;
@@ -82,6 +94,8 @@ export type CategoryEntitlements = z.infer<typeof categoryEntitlementsSchema>;
  */
 export const entitlementsResponseSchema = z.object({
   categories: z.array(categoryEntitlementsSchema),
+  /** Features an admin switched off for this user, so the client can disable EXPORT/PUBLISH/AI. */
+  disabledFeatures: z.array(accessFeatureSchema),
 });
 
 export type EntitlementsResponse = z.infer<typeof entitlementsResponseSchema>;

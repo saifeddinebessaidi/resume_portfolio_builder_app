@@ -114,7 +114,7 @@ export function CategoryTable({ category }: { category: DashboardCategory }): Re
          */}
         {category.blockedReason ? (
           <p className="text-sm text-muted-foreground">
-            {category.subscription
+            {category.subscription || category.blockedReason === "FEATURE_DISABLED"
               ? messages.blocked[category.blockedReason]
               : messages.blocked.freeTierUsed}
           </p>

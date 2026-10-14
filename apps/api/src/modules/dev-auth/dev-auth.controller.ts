@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Post } from "@nestjs/common";
+import { BadRequestException, Body, Controller, ForbiddenException, Post } from "@nestjs/common";
 import { z } from "zod";
 
 import { AppConfigService } from "../../config/app-config.service";
 import { LocalJwtVerifier } from "../../infrastructure/auth/local-jwt.verifier";
+import { PrismaService } from "../../infrastructure/prisma/prisma.service";
 import { Public } from "../../common/decorators/public.decorator";
 import { zodPipe } from "../../common/pipes/zod-validation.pipe";
 
@@ -31,6 +32,7 @@ export class DevAuthController {
   constructor(
     private readonly local: LocalJwtVerifier,
     private readonly config: AppConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Public()
@@ -42,6 +44,19 @@ export class DevAuthController {
     // refusal explicit at the point where the token would be created.
     if (this.config.authProvider !== "local") {
       throw new BadRequestException("Development token issuance is disabled.");
+    }
+
+    // This endpoint has no password, so an ADMIN token is only minted for an explicitly allowlisted
+    // email. Role is read from the database, never from the request.
+    const existing = await this.prisma.user.findUnique({
+      where: { email: body.email },
+      select: { role: true },
+    });
+    if (
+      existing?.role === "ADMIN" &&
+      !this.config.devAuthAdminAllowlist.includes(body.email.toLowerCase())
+    ) {
+      throw new ForbiddenException("Admin accounts cannot use development sign-in.");
     }
 
     const { accessToken, expiresIn, subject } = await this.local.issue(body.email);

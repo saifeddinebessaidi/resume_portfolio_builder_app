@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 
 interface RequestOptions<T> {
   path: string;
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** The response schema from `@repo/contracts`. Validated in development, trusted in production. */
   schema?: ZodType<T>;

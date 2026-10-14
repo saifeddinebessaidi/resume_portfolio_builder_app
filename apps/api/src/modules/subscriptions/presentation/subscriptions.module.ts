@@ -5,7 +5,10 @@ import { AdminSubscriptionsController } from "./admin-subscriptions.controller";
 import { CATEGORY_RESOLVER } from "../domain/category-resolver.port";
 import { CatalogModule } from "../../catalog/presentation/catalog.module";
 import { ConsumeEntitlementService } from "../application/consume-entitlement.service";
+import { ACCESS_OVERRIDES } from "../domain/access-override";
 import { EntitlementGuard } from "./entitlement.guard";
+import { FeatureAccessService } from "../application/feature-access.service";
+import { PrismaAccessOverrideReader } from "../infrastructure/prisma-access-override-reader";
 import { GrantSubscriptionUseCase } from "../application/grant-subscription.use-case";
 import { ListMySubscriptionsUseCase } from "../application/list-my-subscriptions.use-case";
 import { PrismaAuditLog } from "../infrastructure/prisma-audit-log";
@@ -43,6 +46,8 @@ import { UnitOfWork } from "../../../infrastructure/prisma/unit-of-work";
     ListMySubscriptionsUseCase,
     GrantSubscriptionUseCase,
     EntitlementGuard,
+    FeatureAccessService,
+    { provide: ACCESS_OVERRIDES, useClass: PrismaAccessOverrideReader },
     { provide: SUBSCRIPTION_REPOSITORY, useClass: PrismaSubscriptionRepository },
     { provide: USAGE_COUNTER_REPOSITORY, useClass: PrismaUsageCounterRepository },
     { provide: AUDIT_LOG, useClass: PrismaAuditLog },
@@ -68,6 +73,13 @@ import { UnitOfWork } from "../../../infrastructure/prisma/unit-of-work";
     AUDIT_LOG,
     // Injected by the projects module's create use case to enforce the free-tier cap.
     PROJECT_COUNTER,
+    // Admin per-user blocks: checked inside the projects and generation use cases.
+    FeatureAccessService,
+    // The admin module's user detail reuses these rather than re-deriving plan names and grants.
+    ListMySubscriptionsUseCase,
+    GrantSubscriptionUseCase,
+    USAGE_COUNTER_REPOSITORY,
+    ACCESS_OVERRIDES,
   ],
 })
 export class SubscriptionsModule {}

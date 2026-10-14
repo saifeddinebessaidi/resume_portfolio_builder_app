@@ -33,6 +33,8 @@ export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
 
 export const orderStatusSchema = z.enum(OrderStatus);
 
+export const ORDER_STATUSES = Object.values(OrderStatus);
+
 export const PaymentStatus = {
   PENDING: "PENDING",
   SUCCEEDED: "SUCCEEDED",

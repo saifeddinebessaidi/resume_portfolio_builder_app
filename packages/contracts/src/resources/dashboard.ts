@@ -2,7 +2,11 @@ import { z } from "zod";
 
 import { categoryCodeSchema } from "../enums/category";
 import { projectListItemSchema } from "./project";
-import { activeSubscriptionSummarySchema, resolvedEntitlementSchema } from "./subscription";
+import {
+  activeSubscriptionSummarySchema,
+  blockedReasonSchema,
+  resolvedEntitlementSchema,
+} from "./subscription";
 import { userSummarySchema } from "./user";
 
 /** How many recent projects each category block carries. The full list is GET /projects. */
@@ -21,9 +25,7 @@ export const dashboardCategorySchema = z.object({
    * and the UI would enable a button the API then rejects.
    */
   canCreate: z.boolean(),
-  blockedReason: z
-    .enum(["NO_ACTIVE_SUBSCRIPTION", "ENTITLEMENT_EXHAUSTED", "SUBSCRIPTION_EXPIRED"])
-    .nullable(),
+  blockedReason: blockedReasonSchema.nullable(),
 
   projects: z.object({
     /** Total across all pages, so the table can say "2 projets" without a second call. */

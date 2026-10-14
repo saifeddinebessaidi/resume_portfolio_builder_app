@@ -86,10 +86,24 @@ export const ROUTES = {
 
   events: () => "/events",
 
+  auth: {
+    signUp: () => "/auth/signup",
+    signIn: () => "/auth/signin",
+  },
   admin: {
     users: () => "/admin/users",
     user: (id: string) => `/admin/users/${id}`,
+    userAccess: (id: string, feature: string) => `/admin/users/${id}/access/${feature}`,
+    userEntitlementOverrides: (id: string) => `/admin/users/${id}/entitlement-overrides`,
+    userEntitlementOverride: (id: string, category: string, key: string) =>
+      `/admin/users/${id}/entitlement-overrides/${category}/${key}`,
     grantSubscription: () => "/admin/subscriptions/grant",
+    cancelSubscription: (id: string) => `/admin/subscriptions/${id}/cancel`,
+    extendSubscription: (id: string) => `/admin/subscriptions/${id}/extend`,
+    orders: () => "/admin/orders",
+    markOrderPaid: (id: string) => `/admin/orders/${id}/mark-paid`,
+    refundOrder: (id: string) => `/admin/orders/${id}/refund`,
+    plans: () => "/admin/plans",
     metricsOverview: () => "/admin/metrics/overview",
     metricsSeries: () => "/admin/metrics/series",
     auditLogs: () => "/admin/audit-logs",

@@ -7,6 +7,7 @@ import { useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { GenerateContentButton } from "./generate-content-button";
 import { PortfolioPhotos } from "./portfolio-photos";
+import { WorkImages } from "./work-images";
 import { PortfolioVideos } from "./portfolio-videos";
 import { messages } from "@/messages/fr";
 
@@ -455,10 +456,9 @@ export function PortfolioForm({
               placeholder={messages.portfolio.workDescriptionPlaceholder}
               onChange={(v) => update("works", i, { description: v })}
             />
-            <Input
-              value={w.imageUrl ?? ""}
-              placeholder={messages.portfolio.imageUrl}
-              onChange={(v) => update("works", i, { imageUrl: v })}
+            <WorkImages
+              value={w.imageUrls.length > 0 ? w.imageUrls : w.imageUrl ? [w.imageUrl] : []}
+              onChange={(urls) => update("works", i, { imageUrls: urls, imageUrl: urls[0] ?? "" })}
             />
             <button
               type="button"
@@ -471,7 +471,7 @@ export function PortfolioForm({
         ))}
         <AddButton
           label={messages.portfolio.addWork}
-          onClick={() => add("works", { title: "", featured: false })}
+          onClick={() => add("works", { title: "", featured: false, imageUrls: [] })}
         />
       </Block>
 

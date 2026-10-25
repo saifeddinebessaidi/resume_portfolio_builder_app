@@ -27,6 +27,7 @@ import {
   TRANSACTION_RUNNER,
   type TransactionRunner,
 } from "../../subscriptions/domain/transaction-runner.port";
+import { USER_REPOSITORY, type UserRepository } from "../../users/domain/user.repository";
 import {
   fallbackSlug,
   isUsableSlug,
@@ -47,6 +48,7 @@ export class PublishProjectUseCase {
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(PUBLICATION_REPOSITORY) private readonly publications: PublicationRepository,
     @Inject(SUBSCRIPTION_REPOSITORY) private readonly subs: SubscriptionRepository,
+    @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Inject(TRANSACTION_RUNNER) private readonly uow: TransactionRunner,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly consume: ConsumeEntitlementService,
@@ -105,7 +107,9 @@ export class PublishProjectUseCase {
 
       if (await this.publications.slugExists(slug)) throw new SlugTakenError(slug);
     } else {
-      slug = await this.generateSlug(project.title);
+      // The owner's name (`saif-bessaidi`) makes a link worth sharing; a title like "Mon portfolio" doesn't.
+      const owner = await this.users.findById(command.actorUserId);
+      slug = await this.generateSlug(owner?.fullName ?? project.title, project.title);
     }
 
     /**
@@ -157,14 +161,15 @@ export class PublishProjectUseCase {
   }
 
   /**
-   * Derives a slug from the title, then suffixes on collision.
+   * Derives a slug from `source` (falling back to `title`), then suffixes on collision.
    *
    * Bounded retries with random suffixes rather than a counter: a counter would leak how many
-   * portfolios share a title, and would need a read-modify-write that races.
+   * portfolios share a name, and would need a read-modify-write that races.
    */
-  private async generateSlug(title: string): Promise<string> {
-    const base = slugify(title);
-    const seed = isUsableSlug(base) ? base : fallbackSlug(randomBytes(6).toString("hex"));
+  private async generateSlug(source: string, title: string): Promise<string> {
+    const seed =
+      [slugify(source), slugify(title)].find(isUsableSlug) ??
+      fallbackSlug(randomBytes(6).toString("hex"));
 
     if (!(await this.publications.slugExists(seed))) return seed;
 

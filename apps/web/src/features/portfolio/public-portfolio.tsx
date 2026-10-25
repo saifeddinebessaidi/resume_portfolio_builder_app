@@ -678,6 +678,20 @@ function ProjectDetail({ work, image }: { work: PortfolioWork; image: string | n
             {capitalizeSentences(work.description)}
           </p>
         ) : null}
+        {/* The lead image is already at the top; the rest of the project's uploads follow the text. */}
+        {work.imageUrls.length > 1 ? (
+          <div className="mt-8 grid grid-cols-2 gap-3">
+            {work.imageUrls.slice(1).map((url, i) => (
+              <img
+                key={`${url}-${i}`}
+                src={url}
+                alt={work.title}
+                loading="lazy"
+                className="aspect-[4/3] w-full rounded-xl object-cover"
+              />
+            ))}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -874,7 +888,8 @@ function imageFor(
   index: number,
   photos: PortfolioPayload["photos"],
 ): string | null {
-  if (work.imageUrl?.trim()) return work.imageUrl;
+  const own = work.imageUrls[0] ?? work.imageUrl;
+  if (own?.trim()) return own;
   if (photos.length === 0) return null;
   return photos[index % photos.length]?.assetUrl ?? null;
 }

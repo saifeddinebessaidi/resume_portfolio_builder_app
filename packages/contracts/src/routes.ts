@@ -135,4 +135,4 @@ export function withQuery(
 
 /** Absolute public link for a publication, used to render `publicUrl` in responses. */
 export const publicUrlFor = (appUrl: string, slug: string): string =>
-  `${appUrl.replace(/\/$/, "")}/p/${slug}`;
+  `${appUrl.replace(/\/$/, "")}/${slug}`;

@@ -24,6 +24,7 @@ import { SubscriptionsModule } from "../../subscriptions/presentation/subscripti
 import { TRANSACTION_RUNNER } from "../../subscriptions/domain/transaction-runner.port";
 import { UnitOfWork } from "../../../infrastructure/prisma/unit-of-work";
 import { UpdateProjectUseCase } from "../application/update-project.use-case";
+import { UsersModule } from "../../users/presentation/users.module";
 
 /**
  * Depends on `SubscriptionsModule` — one direction only.
@@ -33,7 +34,7 @@ import { UpdateProjectUseCase } from "../application/update-project.use-case";
  * keeps this a dependency rather than a cycle needing `forwardRef`.
  */
 @Module({
-  imports: [SubscriptionsModule, CatalogModule],
+  imports: [SubscriptionsModule, CatalogModule, UsersModule],
   controllers: [ProjectsController, PublicPublicationsController],
   providers: [
     CreateProjectUseCase,

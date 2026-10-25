@@ -90,6 +90,11 @@ export const portfolioWorkSchema = z.object({
   category: optionalShortText,
   description: z.string().max(2_000).optional(),
   imageUrl: z.string().max(1_000).optional(),
+  /**
+   * Uploaded images, first one leads. `imageUrl` is kept as a mirror of `imageUrls[0]` so payloads
+   * published before this field existed still render.
+   */
+  imageUrls: z.array(z.string().max(1_000)).max(12).default([]),
   /** The original's flag: featured items render large, the rest as a list. */
   featured: z.boolean().default(false),
 });

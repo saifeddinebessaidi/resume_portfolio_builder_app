@@ -18,7 +18,7 @@ export const idSchema = z
 export type Id = z.infer<typeof idSchema>;
 
 /**
- * The public URL segment of a publication: `/p/:slug`.
+ * The public URL segment of a publication: `/:slug`, at the site root.
  *
  * Lowercase, hyphen-separated, no leading/trailing hyphen. The 3-character minimum keeps the
  * namespace from filling with single letters, and the reserved list stops a user claiming a
@@ -50,6 +50,10 @@ export const RESERVED_SLUGS = [
   "login",
   "logout",
   "signup",
+  "signin",
+  "session",
+  "dev-signin",
+  "offres",
   "dashboard",
   "resume",
   "portfolio",

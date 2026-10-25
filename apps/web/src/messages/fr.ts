@@ -235,7 +235,7 @@ export const messages = {
     workDescription: "Description",
     workDescriptionPlaceholder: "Description courte",
     addWork: "+ Ajouter un projet",
-    imageUrl: "URL de l'image",
+    workImages: "Images du projet",
     featured: "En vedette",
     pricingCategory: "Catégorie (reels, live, événements…)",
     /** The reference's four presets. `category` stays free text in the payload — a creator names their own. */
